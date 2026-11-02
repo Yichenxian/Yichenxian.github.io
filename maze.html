@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#050806">
+<title>迷宫寻路 · 像素迷宫</title>
+<link rel="stylesheet" href="maze.css">
+</head>
+<body>
+
+<!-- 顶部栏：左上角返回 -->
+<header class="topbar">
+  <a class="back" href="index.html" aria-label="返回首页">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M15 18l-6-6 6-6"/>
+    </svg>
+    <span>返回</span>
+  </a>
+  <div class="brand">迷宫寻路</div>
+</header>
+
+<div class="wrap" id="wrap">
+  <div class="app">
+
+    <div class="stage" id="stage">
+      <canvas id="cv" width="720" height="720"></canvas>
+
+      <div class="hud" id="hud">
+        <span class="t" id="hudTime">00:00.00</span>
+        <span id="hudSteps">0 步</span>
+      </div>
+
+      <!-- 开始 -->
+      <div class="overlay show" id="ovStart">
+        <div class="title">迷宫寻路</div>
+        <div class="sub">30 × 30 像素迷宫<br>走到红色格即通关</div>
+        <button class="btn primary" id="btnStart">开始游戏</button>
+      </div>
+
+      <!-- 选色 -->
+      <div class="overlay" id="ovSetup">
+        <div class="title small">选择你的像素颜色</div>
+        <div class="preview" id="preview"></div>
+        <div class="swatches" id="swatches"></div>
+        <label class="picker">
+          <span>自定义</span>
+          <input type="color" id="cpick" value="#ffffff">
+        </label>
+        <button class="btn primary" id="btnEnter">进入迷宫</button>
+        <button class="btn link" id="btnBack">← 返回</button>
+      </div>
+
+      <!-- 生成中 -->
+      <div class="overlay" id="ovGen">
+        <div class="title small">正在生成迷宫…</div>
+        <div class="bar"><i id="barFill"></i></div>
+        <div class="pct" id="genPct">0%</div>
+        <div class="sub" id="genTip">初始化网格…</div>
+      </div>
+
+      <!-- 通关 -->
+      <div class="overlay" id="ovWin">
+        <div class="title">🎉 恭喜通关！</div>
+        <div class="stats">
+          <div><span>用时</span><b id="winTime">00:00.00</b></div>
+          <div><span>步数</span><b id="winSteps">0</b></div>
+        </div>
+        <button class="btn primary" id="btnRestart">重新开始</button>
+      </div>
+    </div>
+
+    <div class="side" id="side">
+      <button class="btn ghost" id="btnKb">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="2" y="6" width="20" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <rect x="5" y="9" width="2.2" height="2.2" rx=".6" fill="currentColor"/>
+          <rect x="9" y="9" width="2.2" height="2.2" rx=".6" fill="currentColor"/>
+          <rect x="13" y="9" width="2.2" height="2.2" rx=".6" fill="currentColor"/>
+          <rect x="17" y="9" width="2.2" height="2.2" rx=".6" fill="currentColor"/>
+          <rect x="7" y="13.4" width="10" height="2.2" rx=".6" fill="currentColor"/>
+        </svg>
+        <span id="kbLabel">呼出虚拟键盘</span>
+      </button>
+
+      <div class="pad" id="pad">
+        <button data-dir="up"    style="grid-area:u">W</button>
+        <button data-dir="left"  style="grid-area:l">A</button>
+        <button data-dir="down"  style="grid-area:d">S</button>
+        <button data-dir="right" style="grid-area:r">D</button>
+      </div>
+
+      <div class="foot">WASD / ↑↓←→ 移动<br>每按一次走一格 · 踩到红色格通关</div>
+    </div>
+
+  </div>
+</div>
+
+<script src="maze.js"></script>
+</body>
+</html>

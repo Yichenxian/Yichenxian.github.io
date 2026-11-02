@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>背景展示页</title>
+<style>
+  /* ============================================================
+     可修改区域 1：背景图路径
+     替换下面 --bg-image 的 url() 即可换图（当前为同目录 bg.jpg）
+     ============================================================ */
+  :root {
+    --bg-image: url("bg.jpg");
+    --card-bg: rgba(255, 255, 255, 0.08);
+    --card-border: rgba(255, 255, 255, 0.22);
+    --text: #f6f8fc;
+    --text-dim: rgba(246, 248, 252, 0.7);
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --radius: 22px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+                 "Noto Sans SC", system-ui, -apple-system, sans-serif;
+    color: var(--text);
+    background: #0a0d16;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 背景图：始终铺满、居中、固定，隐藏内容时它独立可见 */
+  .bg {
+    position: fixed;
+    inset: 0;
+    background-image: var(--bg-image);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: #0a0d16;
+    z-index: 0;
+  }
+
+  /* 暗化渐变层：仅用于让文字清晰，隐藏内容时一同消失 */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(120% 120% at 50% 40%,
+        rgba(8, 12, 24, 0.18) 0%,
+        rgba(8, 12, 24, 0.55) 70%,
+        rgba(4, 6, 14, 0.72) 100%);
+    z-index: 1;
+    transition: opacity 0.6s var(--ease);
+  }
+
+  /* 居中舞台 */
+  .stage {
+    position: relative;
+    z-index: 2;
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: max(24px, env(safe-area-inset-top))
+             max(20px, env(safe-area-inset-right))
+             max(24px, env(safe-area-inset-bottom))
+             max(20px, env(safe-area-inset-left));
+    transition: opacity 0.55s var(--ease), transform 0.55s var(--ease);
+  }
+
+  /* 半透明玻璃文字框 */
+  .card {
+    width: min(560px, 88vw);
+    padding: clamp(26px, 5vw, 56px);
+    text-align: center;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(16px) saturate(125%);
+    -webkit-backdrop-filter: blur(16px) saturate(125%);
+    animation: rise 0.9s var(--ease) both;
+  }
+
+  .card h1 {
+    font-size: clamp(1.5rem, 5.5vw, 2.4rem);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: 1.3;
+    outline: none;
+  }
+
+  .card p {
+    margin-top: 0.9em;
+    font-size: clamp(0.95rem, 3.4vw, 1.1rem);
+    line-height: 1.7;
+    color: var(--text-dim);
+    outline: none;
+  }
+
+  /* 待定占位样式：较低透明度 + 淡虚线，仅作“内容未定”的视觉提示（不可在网页内编辑） */
+  .placeholder {
+    opacity: 0.8;
+    border-bottom: 1px dotted rgba(246, 248, 252, 0.35);
+  }
+
+  .hint {
+    margin-top: 1.4em;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    color: rgba(246, 248, 252, 0.5);
+  }
+
+  /* 右上角切换按钮 */
+  .toggle {
+    position: fixed;
+    top: max(16px, env(safe-area-inset-top));
+    right: max(16px, env(safe-area-inset-right));
+    z-index: 5;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    color: var(--text);
+    background: rgba(20, 24, 38, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    cursor: pointer;
+    transition: background 0.25s var(--ease), transform 0.2s var(--ease),
+                opacity 0.5s var(--ease);
+  }
+  .toggle:hover { background: rgba(40, 46, 66, 0.7); }
+  .toggle:active { transform: scale(0.96); }
+  .toggle:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 3px; }
+  .toggle svg { width: 18px; height: 18px; display: block; }
+
+  .toggle .icon-hidden { display: none; }
+  .content-hidden .toggle .icon-show { display: none; }
+  .content-hidden .toggle .icon-hidden { display: block; }
+
+  /* 隐藏内容时：淡化叠层与卡片，隐藏按钮，仅留背景图 */
+  .content-hidden .overlay { opacity: 0; }
+  .content-hidden .stage { opacity: 0; transform: scale(1.02); pointer-events: none; }
+  .content-hidden .toggle { opacity: 0; pointer-events: none; }
+
+  /* 隐藏状态下承接“轻触任意位置恢复”的透明层 */
+  .restore-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 4;
+    display: none;
+    cursor: zoom-in;
+  }
+  .content-hidden .restore-layer { display: block; }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card { animation: none; }
+    * { transition-duration: 0.01ms !important; }
+  }
+</style>
+</head>
+<body>
+  <!-- 背景图（始终可见） -->
+  <div class="bg" aria-hidden="true"></div>
+
+  <!-- 暗化渐变（隐藏内容时消失） -->
+  <div class="overlay" aria-hidden="true"></div>
+
+  <!-- 居中半透明文字框（内容待定，可直接点击编辑） -->
+  <main class="stage">
+    <section class="card">
+      <!-- 可修改区域 2：标题（待定文字，只能在源文件里改） -->
+      <h1 class="placeholder">野兽先辈</h1>
+      <!-- 可修改区域 3：说明文字（只能在源文件里改） -->
+      <p class="placeholder">这个背景图是野兽先辈，他是日本淫梦文化的著名人物，名字是田所浩二</p>
+      <div class="hint">提示：右上角按钮可隐藏全部内容，仅留背景图</div>
+    </section>
+  </main>
+
+  <!-- 透明恢复层：隐藏内容时轻触任意位置即可恢复 -->
+  <div class="restore-layer" id="restoreLayer" aria-hidden="true"></div>
+
+  <!-- 右上角切换按钮 -->
+  <button class="toggle" id="toggle" type="button" aria-pressed="false"
+          aria-label="隐藏全部内容">
+    <svg class="icon-show" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+    <svg class="icon-hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 3l18 18"/>
+      <path d="M10.6 10.7a3 3 0 0 0 4.2 4.2"/>
+      <path d="M9.4 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1"/>
+      <path d="M6.1 6.6A17 17 0 0 0 2 12s3.5 7 10 7a10.4 10.4 0 0 0 3.4-.6"/>
+    </svg>
+    <span class="toggle-label">隐藏内容</span>
+  </button>
+
+  <script>
+    (function () {
+      var body = document.body;
+      var toggle = document.getElementById("toggle");
+      var restore = document.getElementById("restoreLayer");
+      var label = toggle.querySelector(".toggle-label");
+
+      function setHidden(hidden) {
+        body.classList.toggle("content-hidden", hidden);
+        toggle.setAttribute("aria-pressed", String(hidden));
+        toggle.setAttribute("aria-label", hidden ? "显示全部内容" : "隐藏全部内容");
+        label.textContent = hidden ? "显示内容" : "隐藏内容";
+      }
+
+      toggle.addEventListener("click", function () {
+        setHidden(!body.classList.contains("content-hidden"));
+      });
+
+      // 隐藏状态下，轻触任意位置恢复
+      restore.addEventListener("click", function () { setHidden(false); });
+    })();
+  </script>
+</body>
+</html>

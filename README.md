@@ -1,2 +1,2 @@
-# bibibaba.github.io(nane changed)
+# bibibaba.github.io(name changed)
 my first website

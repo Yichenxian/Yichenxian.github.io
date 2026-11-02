@@ -32,12 +32,12 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* 背景图：始终铺满、居中、固定，隐藏内容时它独立可见 */
+  /* 背景图：完整居中显示（contain 不裁切，任何屏幕都能看到整张图） */
   .bg {
     position: fixed;
     inset: 0;
     background-image: var(--bg-image);
-    background-size: cover;
+    background-size: contain;
     background-position: center;
     background-repeat: no-repeat;
     background-color: #0a0d16;

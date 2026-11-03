@@ -100,7 +100,7 @@ body {
 /* 横屏：画面在左，按键在右 */
 body.landscape .app { flex-direction: row; align-items: center; gap: 16px; }
 body.landscape .side { gap: 8px; }
-body.landscape .foot { max-width: 170px; font-size: 10.5px; }
+body.landscape .foot { max-width: 196px; font-size: 10.5px; }
 
 /* ===== 方形游戏画面 ===== */
 .stage {
@@ -123,6 +123,219 @@ canvas#cv {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
+
+/* ===== 画面 + 音乐条 容器 ===== */
+.stagewrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(92vw, 560px);
+  min-width: 0;
+}
+
+/* ===== 背景音乐条（游戏画面正上方） ===== */
+.musicbar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: min(92vw, 560px);
+  height: 38px;
+  padding: 0 7px;
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(23, 50, 35, .86), rgba(8, 18, 13, .92));
+  border: 1px solid rgba(53, 224, 122, .24);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .045);
+  overflow: hidden;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.mb-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: #9dd8b4;
+  background: none;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: color .16s ease, background .16s ease, transform .1s ease;
+  touch-action: manipulation;
+}
+.mb-btn:hover { color: #d9ffe7; background: rgba(53, 224, 122, .14); }
+.mb-btn:active { transform: scale(.9); }
+.mb-btn:focus-visible { outline: 2px solid #8dffc0; outline-offset: 1px; }
+.mb-btn svg { width: 15px; height: 15px; display: block; }
+.mb-btn[disabled] { opacity: .38; cursor: default; }
+.mb-btn[hidden] { display: none; }
+
+/* 播放键：实心绿圆，一眼能看到 */
+.mb-play {
+  width: 27px;
+  height: 27px;
+  color: #04170c;
+  background: linear-gradient(180deg, #43ec8b, #1fa85c);
+  box-shadow: 0 0 12px rgba(53, 224, 122, .35);
+}
+.mb-play:hover { color: #04170c; background: linear-gradient(180deg, #56f79b, #23b864); }
+.mb-play svg { width: 16px; height: 16px; }
+.mb-play .ico-pause { display: none; }
+.musicbar.playing .mb-play .ico-play { display: none; }
+.musicbar.playing .mb-play .ico-pause { display: block; }
+
+/* 上传按钮：宽屏时带「上传」字样，窄屏收成纯图标 */
+.mb-up {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  width: auto;
+  padding: 0 5px;
+}
+.mb-up svg { width: 14px; height: 14px; }
+.mb-ulabel {
+  display: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.musicbar.wide .mb-ulabel { display: inline; }
+
+/* 8BIT 徽标 —— 同时是「8BIT / 原声」开关 */
+.mb-badge {
+  flex: none;
+  padding: 2px 6px;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  color: #0b2416;
+  background: linear-gradient(180deg, #6bf7a6, #2ecc71);
+  border: none;
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(53, 224, 122, .3);
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease, box-shadow .16s ease, transform .1s ease;
+  touch-action: manipulation;
+}
+.mb-badge:hover { box-shadow: 0 0 14px rgba(53, 224, 122, .55); }
+.mb-badge:active { transform: scale(.93); }
+.mb-badge:focus-visible { outline: 2px solid #8dffc0; outline-offset: 2px; }
+/* 关闭 8bit：变灰、去掉荧光，文字变成「原声」 */
+.mb-badge.off {
+  color: #9dd8b4;
+  background: rgba(255, 255, 255, .1);
+  box-shadow: inset 0 0 0 1px rgba(53, 224, 122, .28);
+  letter-spacing: .06em;
+}
+.mb-badge.off:hover { color: #d9ffe7; background: rgba(53, 224, 122, .16); }
+
+.mb-title {
+  flex: 0 1 auto;
+  max-width: 62%;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: #c8f2d9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mb-gap { flex: 1 1 auto; min-width: 2px; }
+.musicbar.busy .mb-title { color: #ffd93d; animation: mbBlink 1.1s ease-in-out infinite; }
+.musicbar.err .mb-title { color: #ff7a7a; }
+@keyframes mbBlink { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+
+/* 播放中的跳动音柱 */
+.mb-eq {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.musicbar.playing .mb-eq { opacity: 1; }
+.mb-eq i {
+  width: 2.5px;
+  height: 8px;
+  border-radius: 1px;
+  background: linear-gradient(180deg, #6bf7a6, #1fa85c);
+  animation: mbBar .92s ease-in-out infinite;
+}
+.mb-eq i:nth-child(2) { animation-delay: .16s; }
+.mb-eq i:nth-child(3) { animation-delay: .32s; }
+.mb-eq i:nth-child(4) { animation-delay: .48s; }
+@keyframes mbBar {
+  0%, 100% { height: 5px; opacity: .7; }
+  50% { height: 13px; opacity: 1; }
+}
+
+/* 音乐音量 */
+.mb-vol {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 2px;
+  border-left: 1px solid rgba(53, 224, 122, .16);
+}
+.mb-mute svg { width: 15px; height: 15px; }
+.mb-mute .cross { display: none; }
+.mb-mute.muted .wave { display: none; }
+.mb-mute.muted .cross { display: block; }
+.mb-mute.muted { color: #6e8f7d; }
+
+.mb-vol input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 58px;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.mb-vol input[type="range"]:focus-visible { outline: 2px solid #8dffc0; outline-offset: 2px; border-radius: 4px; }
+.mb-vol input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 3px;
+  background: rgba(140, 220, 175, .24);
+}
+.mb-vol input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px;
+  height: 11px;
+  margin-top: -3.5px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #5ff59b, #1fa85c);
+  box-shadow: 0 0 7px rgba(53, 224, 122, .7);
+}
+.mb-vol input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 3px;
+  background: rgba(140, 220, 175, .24);
+}
+.mb-vol input[type="range"]::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #5ff59b, #1fa85c);
+}
+
+/* 画面很窄时逐级收掉次要控件（由 JS 按画面宽度加 class）
+   —— 8BIT 徽标是开关，任何宽度都保留 */
+.musicbar.compact .mb-vol input[type="range"] { display: none; }
+.musicbar.compact .mb-vol { border-left: none; }
+.musicbar.tiny .mb-eq { display: none; }
 
 /* ===== HUD（放在画面底部：最下面两行永远是绿墙，不挡通路） ===== */
 .hud {
@@ -148,6 +361,16 @@ canvas#cv {
   line-height: 1.2;
 }
 .hud .t { color: var(--accent-2); font-weight: 700; }
+.hud .fogtag {
+  padding: 3px 9px;
+  font-size: 10.5px;
+  letter-spacing: .14em;
+  text-indent: .14em;
+  color: #bff7d3;
+  background: rgba(53, 224, 122, .18);
+  border-color: rgba(53, 224, 122, .5);
+}
+.hud .fogtag[hidden] { display: none; }
 
 /* ===== 覆盖层 ===== */
 .overlay {
@@ -370,42 +593,147 @@ input[type="color"]::-moz-color-swatch {
   color: #04170c;
 }
 
-/* ===== 选项行：迷雾开关 + 音量（虚拟按键下方） ===== */
+/* ===== 出发前设置：地图大小 / 迷雾开关 ===== */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(300px, 88%);
+  margin: 2px 0 2px;
+}
+
+.field {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  letter-spacing: .05em;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.field-label { white-space: nowrap; }
+
+.field-val {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-2);
+  letter-spacing: .02em;
+  min-width: 52px;
+  text-align: right;
+}
+
+.field-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.field-range:focus-visible { outline: 2px solid #8dffc0; outline-offset: 2px; border-radius: 4px; }
+.field-range::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(140, 220, 175, .26);
+  box-shadow: inset 0 0 0 1px rgba(53, 224, 122, .22);
+}
+.field-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -4.5px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #5ff59b, #1fa85c);
+  box-shadow: 0 0 8px rgba(53, 224, 122, .7);
+}
+.field-range::-moz-range-track {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(140, 220, 175, .26);
+}
+.field-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #5ff59b, #1fa85c);
+  box-shadow: 0 0 8px rgba(53, 224, 122, .7);
+}
+
+/* 开关（独占第三列，靠右对齐，和上面的数值列对齐） */
+.sw {
+  position: relative;
+  grid-column: 3;
+  justify-self: end;
+  width: 38px;
+  height: 22px;
+  flex: none;
+}
+.sw input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.sw i {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid rgba(53, 224, 122, .3);
+  transition: background .2s ease, border-color .2s ease;
+  pointer-events: none;
+}
+.sw i::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #9dd8b4;
+  transition: transform .2s ease, background .2s ease;
+}
+.sw input:checked + i {
+  background: linear-gradient(180deg, #43ec8b, #1fa85c);
+  border-color: transparent;
+  box-shadow: 0 0 14px rgba(53, 224, 122, .45);
+}
+.sw input:checked + i::after { transform: translateX(16px); background: #04170c; }
+.sw input:focus-visible + i { outline: 2px solid #8dffc0; outline-offset: 2px; }
+
+.field-note {
+  font-size: 11px;
+  color: #6e8f7d;
+  letter-spacing: .04em;
+  text-align: right;
+}
+.field-note[hidden] { display: none; }
+
+/* ===== 选项行：音量（虚拟按键下方） ===== */
 .opts {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: center;
+  gap: 8px;
   width: min(248px, 78vw);
   margin-top: 1px;
 }
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 13px;
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  color: #9dd8b4;
-  background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(53, 224, 122, .28);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: color .18s ease, background .18s ease,
-              border-color .18s ease, box-shadow .18s ease;
-  touch-action: manipulation;
-}
-.chip svg { width: 14px; height: 14px; display: block; flex: none; }
-.chip:hover { background: rgba(53, 224, 122, .14); color: #c7f7d9; }
-.chip:focus-visible { outline: 2px solid #8dffc0; outline-offset: 3px; }
-.chip[aria-pressed="true"] {
-  color: #04170c;
-  background: linear-gradient(180deg, #43ec8b, #1fa85c);
-  border-color: transparent;
-  box-shadow: 0 0 16px rgba(53, 224, 122, .45);
+.opt-label {
+  font-size: 11.5px;
+  letter-spacing: .08em;
+  color: #6e8f7d;
+  white-space: nowrap;
 }
 
 .vol {
@@ -489,6 +817,21 @@ input[type="color"]::-moz-color-swatch {
   letter-spacing: .03em;
   text-align: center;
   max-width: 92vw;
+}
+
+/* 提示里的「8BIT」做成和音乐条徽标同款的小绿块，一眼能对上 */
+.foot-key {
+  display: inline-block;
+  margin: 0 1px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  line-height: 1.35;
+  color: #0b2416;
+  background: linear-gradient(180deg, #6bf7a6, #2ecc71);
+  border-radius: 3px;
+  vertical-align: 1px;
 }
 
 @media (prefers-reduced-motion: reduce) {

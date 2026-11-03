@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#050806">
 <title>迷宫寻路 · 像素迷宫</title>
-<link rel="stylesheet" href="maze.css">
+<link rel="stylesheet" href="maze.css?v=20261104n">
 </head>
 <body>
 
@@ -24,11 +24,70 @@
 <div class="wrap" id="wrap">
   <div class="app">
 
+    <!-- 游戏画面 + 上方音乐条 -->
+    <div class="stagewrap" id="stagewrap">
+
+    <!-- 背景音乐条：播放/暂停 · 曲名 · 音量 · 上传转 8bit -->
+    <div class="musicbar" id="musicbar">
+      <button class="mb-btn mb-play" id="mbPlay" type="button" aria-label="播放背景音乐">
+        <svg class="ico-play" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M8.4 5.3v13.4L19 12z" fill="currentColor"/>
+        </svg>
+        <svg class="ico-pause" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="7.2" y="5.4" width="3.4" height="13.2" rx="1" fill="currentColor"/>
+          <rect x="13.4" y="5.4" width="3.4" height="13.2" rx="1" fill="currentColor"/>
+        </svg>
+      </button>
+
+      <button class="mb-badge" id="mb8bit" type="button" aria-pressed="true"
+              title="切换 8BIT / 原声">8BIT</button>
+      <span class="mb-title" id="mbTitle">Cool &amp; Powerful</span>
+      <span class="mb-eq" id="mbEq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span class="mb-gap"></span>
+
+      <button class="mb-btn" id="mbReset" type="button" aria-label="切回默认音乐" title="切回默认音乐" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19 12a7 7 0 1 1-2.2-5.1" fill="none" stroke="currentColor"
+                stroke-width="1.9" stroke-linecap="round"/>
+          <path d="M19.4 4.6v4.2h-4.2" fill="none" stroke="currentColor"
+                stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+
+      <button class="mb-btn mb-up" id="mbUpload" type="button" aria-label="上传音乐并转成 8bit" title="上传音乐 · 自动转 8bit">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 15.6V5.4m0 0L8.3 9.1M12 5.4l3.7 3.7" fill="none" stroke="currentColor"
+                stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4.8 15.2v2.6a2 2 0 0 0 2 2h10.4a2 2 0 0 0 2-2v-2.6" fill="none"
+                stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+        </svg>
+        <span class="mb-ulabel">上传</span>
+      </button>
+      <input type="file" id="mbFile" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.aac,.opus" hidden>
+
+      <div class="mb-vol">
+        <button class="mb-btn mb-mute" id="mbMute" type="button" aria-label="音乐静音">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9.4v5.2h3.3L12 18.6V5.4L7.3 9.4H4Z" fill="currentColor"/>
+            <path class="wave" d="M15.3 9.3a3.8 3.8 0 0 1 0 5.4" fill="none"
+                  stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            <path class="wave" d="M17.8 7a7.6 7.6 0 0 1 0 10" fill="none"
+                  stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            <path class="cross" d="M16.6 9.2 21 13.6M21 9.2 16.6 13.6" fill="none"
+                  stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <input type="range" id="mbVol" min="0" max="100" step="1" value="48"
+               aria-label="音乐音量">
+      </div>
+    </div>
+
     <div class="stage" id="stage">
       <canvas id="cv" width="720" height="720"></canvas>
 
       <div class="hud" id="hud">
         <span class="t" id="hudTime">00:00.00</span>
+        <span class="fogtag" id="hudFog" hidden>迷雾</span>
         <span id="hudSteps">0 步</span>
       </div>
 
@@ -39,15 +98,33 @@
         <button class="btn primary" id="btnStart">开始游戏</button>
       </div>
 
-      <!-- 选色 -->
+      <!-- 出发前设置：颜色 + 地图大小 + 迷雾 -->
       <div class="overlay" id="ovSetup">
-        <div class="title small">选择你的像素颜色</div>
+        <div class="title small">出发前设置</div>
         <div class="preview" id="preview"></div>
         <div class="swatches" id="swatches"></div>
         <label class="picker">
           <span>自定义</span>
           <input type="color" id="cpick" value="#ffffff">
         </label>
+
+        <div class="fields">
+          <label class="field">
+            <span class="field-label">地图大小</span>
+            <input type="range" id="sizeRange" class="field-range"
+                   min="30" max="100" step="1" value="30" aria-label="地图大小">
+            <b class="field-val" id="sizeVal">30×30</b>
+          </label>
+          <label class="field">
+            <span class="field-label">迷雾模式</span>
+            <span class="sw">
+              <input type="checkbox" id="fogChk" aria-label="迷雾模式">
+              <i></i>
+            </span>
+          </label>
+          <div class="field-note" id="sizeNote" hidden>画面会跟随主角移动</div>
+        </div>
+
         <button class="btn primary" id="btnEnter">进入迷宫</button>
         <button class="btn link" id="btnBack">← 返回</button>
       </div>
@@ -70,6 +147,7 @@
         <button class="btn primary" id="btnRestart">重新开始</button>
       </div>
     </div>
+    </div><!-- /stagewrap -->
 
     <div class="side" id="side">
       <button class="btn ghost" id="btnKb">
@@ -91,17 +169,9 @@
         <button data-dir="right" style="grid-area:r">D</button>
       </div>
 
-      <!-- 虚拟按键下方：迷雾模式 + 音效音量 -->
+      <!-- 虚拟按键下方：音效音量 -->
       <div class="opts">
-        <button class="chip" id="fogBtn" type="button" aria-pressed="false" title="迷雾模式（终点始终可见）">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"
-                  fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
-            <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/>
-          </svg>
-          <span>迷雾</span>
-        </button>
-
+        <span class="opt-label">音效</span>
         <div class="vol">
           <button class="volbtn" id="muteBtn" type="button" aria-label="静音">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -119,12 +189,18 @@
         </div>
       </div>
 
-      <div class="foot">WASD / ↑↓←→ 移动<br>每按一次走一格 · 踩到红色格通关</div>
+      <div class="foot">
+        WASD / ↑↓←→ 移动<br>
+        每按一次走一格 · 踩到红色格通关<br>
+        点 <b class="foot-key">8BIT</b> 切换 8bit / 原声
+      </div>
     </div>
 
   </div>
 </div>
 
-<script src="maze.js"></script>
+<script src="bitcrush.js?v=20261104n"></script>
+<script src="maze.js?v=20261104n"></script>
+<script src="maze-music.js?v=20261104n"></script>
 </body>
 </html>

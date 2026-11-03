@@ -10,7 +10,7 @@
   'use strict';
 
   // 版本标记：更新后如果这里还是旧版本号，说明浏览器在用缓存
-  var VER = 'v20261104n';
+  var VER = 'v20261104o';
   try { console.log('%c迷宫寻路 ' + VER, 'color:#35e07a;font-weight:700'); } catch (e) {}
 
   // ==================== CONFIG（想改手感就动这里） ====================
@@ -645,18 +645,26 @@
     });
   }
 
+  // 把游戏状态彻底复位回「开始」界面。
+  // 注意：这里不复位音乐模块 —— 它独立运行，重开一局不该打断正在放的音乐。
   function resetToStart() {
     state = 'start';
     gen = null;
     hold = null;
+    bump = null;
+    pressedKeys.length = 0;
     exitI = -1;
     px = 1; py = 1;
     steps = 0;
     camX = 0; camY = 0;
     fogRevealAt = 0;
+    startTime = 0;
+    renderErrorLogged = false;   // 复位渲染异常标记，重新给一次日志机会
     grid.fill(1);
     paintAll();
     resetFog();
+    hudSteps.textContent = '0 步';
+    hudTime.textContent = '00:00.00';
     hud.classList.remove('show');
     showOnly(ovStart);
     fit();
@@ -772,13 +780,9 @@
 
   $('btnRestart').addEventListener('click', function () {
     ensureAudio();
-    // 直接整页刷新回初始状态：比在内存里重置更彻底，
-    // 任何残留状态（画布、遮罩、定时器、异常）都会被清干净
-    try {
-      location.reload();
-    } catch (e) {
-      resetToStart();
-    }
+    // 不再整页刷新：刷新会把背景音乐一起打断，而且回来还要再点一次才有声。
+    // 改成在内存里彻底复位，音乐模块独立运行，重开一局不打断它。
+    resetToStart();
   });
 
   btnKb.addEventListener('click', function () {

@@ -11,7 +11,7 @@
 (function () {
   'use strict';
 
-  var VER = 'v20261104n';
+  var VER = 'v20261104o';
   try { console.log('%c背景音乐 ' + VER, 'color:#35e07a;font-weight:700'); } catch (e) {}
 
   // ==================== CONFIG ====================
@@ -555,7 +555,8 @@
       get kind() { return src.kind; },
       get eightBit() { return eightBit; },
       get title() { return title.textContent; },
-      get duration() { return src.buffer ? +src.buffer.duration.toFixed(2) : 0; }
+      get duration() { return src.buffer ? +src.buffer.duration.toFixed(2) : 0; },
+      get position() { return +(playing ? bufferPos() : bufOffset).toFixed(2); }
     };
   })();
 })();

@@ -370,6 +370,117 @@ input[type="color"]::-moz-color-swatch {
   color: #04170c;
 }
 
+/* ===== 选项行：迷雾开关 + 音量（虚拟按键下方） ===== */
+.opts {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: min(248px, 78vw);
+  margin-top: 1px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: #9dd8b4;
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(53, 224, 122, .28);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color .18s ease, background .18s ease,
+              border-color .18s ease, box-shadow .18s ease;
+  touch-action: manipulation;
+}
+.chip svg { width: 14px; height: 14px; display: block; flex: none; }
+.chip:hover { background: rgba(53, 224, 122, .14); color: #c7f7d9; }
+.chip:focus-visible { outline: 2px solid #8dffc0; outline-offset: 3px; }
+.chip[aria-pressed="true"] {
+  color: #04170c;
+  background: linear-gradient(180deg, #43ec8b, #1fa85c);
+  border-color: transparent;
+  box-shadow: 0 0 16px rgba(53, 224, 122, .45);
+}
+
+.vol {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.volbtn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: #9dd8b4;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color .18s ease;
+  touch-action: manipulation;
+}
+.volbtn:hover { color: #c7f7d9; }
+.volbtn:focus-visible { outline: 2px solid #8dffc0; outline-offset: 2px; border-radius: 4px; }
+.volbtn svg { width: 17px; height: 17px; display: block; }
+.volbtn .cross { display: none; }
+.volbtn.muted .wave { display: none; }
+.volbtn.muted .cross { display: block; }
+.volbtn.muted { color: #6e8f7d; }
+
+.vol input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  max-width: 96px;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.vol input[type="range"]:focus-visible { outline: 2px solid #8dffc0; outline-offset: 2px; border-radius: 4px; }
+
+.vol input[type="range"]::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(140, 220, 175, .26);
+  box-shadow: inset 0 0 0 1px rgba(53, 224, 122, .22);
+}
+.vol input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -4.5px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #5ff59b, #1fa85c);
+  box-shadow: 0 0 8px rgba(53, 224, 122, .7);
+}
+.vol input[type="range"]::-moz-range-track {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(140, 220, 175, .26);
+}
+.vol input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #5ff59b, #1fa85c);
+  box-shadow: 0 0 8px rgba(53, 224, 122, .7);
+}
+
 /* ===== 底部提示 ===== */
 .foot {
   font-size: 11.5px;

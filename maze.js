@@ -17,7 +17,10 @@
     DEFAULT_COLOR: '#ffffff', // 默认主角颜色
     GEN_FRAME_MS: 8,          // 生成动画每帧耗时预算（毫秒）
     MOVE_COOLDOWN: 95,        // 长按连发时的最小间隔（毫秒）
-    BEEP_VOL: 0.045           // 音效音量
+    BEEP_VOL: 0.045,          // 音效基准音量（音量 100% 时的单次音效峰值）
+    FOG_R: 2,                 // 迷雾模式：照亮半径（格），2 = 身周 5×5
+    FOG_MEMORY: 0.74,         // 走过区域的残影浓度；改成 1 则走过的也全黑（零记忆）
+    VOL_DEFAULT: 60           // 默认音量（%）
   };
 
   var N = CFG.N, CELL = CFG.CELL, SIZE = N * CELL, MC = CFG.MC;
@@ -32,6 +35,7 @@
   var btnKb = $('btnKb'), kbLabel = $('kbLabel'), pad = $('pad');
   var barFill = $('barFill'), genPct = $('genPct'), genTip = $('genTip');
   var preview = $('preview'), cpick = $('cpick'), swatches = $('swatches');
+  var fogBtn = $('fogBtn'), muteBtn = $('muteBtn'), volRange = $('volRange');
 
   // 离屏画布：迷宫底图只画一次，每帧直接贴图，省性能
   var bgc = document.createElement('canvas');
@@ -39,6 +43,11 @@
   var bx = bgc.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   bx.imageSmoothingEnabled = false;
+
+  // 迷雾层：只在主角移动/开关迷雾时重绘，每帧直接贴图
+  var fogc = document.createElement('canvas');
+  fogc.width = fogc.height = SIZE;
+  var fx = fogc.getContext('2d');
 
   // ==================== 状态 ====================
   var state = 'start';            // start | setup | generating | playing | win
@@ -50,6 +59,11 @@
   var gen = null;                 // 生成器上下文
   var bump = null;                // 撞墙抖动反馈
   var lastMoveAt = 0;
+
+  var fogOn = false;              // 迷雾模式开关
+  var explored = new Uint8Array(N * N); // 走过的区域记忆
+  var masterVol = CFG.VOL_DEFAULT / 100; // 音效主音量 0~1
+  var lastVol = CFG.VOL_DEFAULT;         // 静音前的音量，用于恢复
 
   // ==================== 绘制基础 ====================
   function paintCell(i) {
@@ -64,6 +78,40 @@
 
   function paintAll() {
     for (var i = 0; i < N * N; i++) paintCell(i);
+  }
+
+  // ==================== 迷雾 ====================
+  // 主角身周 FOG_R 格全亮；走过的地方留一层很暗的残影（方便原路返回）；
+  // 没去过的区域纯黑，一点底图都不透。
+  // 终点红格在 render 里画在迷雾之上，永远可见。
+  function rebuildFog() {
+    fx.clearRect(0, 0, SIZE, SIZE);
+    if (!fogOn) return;
+    for (var i = 0; i < N * N; i++) {
+      var cx = i % N, cy = (i / N) | 0;
+      var d = Math.max(Math.abs(cx - px), Math.abs(cy - py));
+      if (d <= CFG.FOG_R) explored[i] = 1;
+
+      var a;
+      if (d <= CFG.FOG_R) {
+        a = 0;
+      } else if (d === CFG.FOG_R + 1) {
+        a = explored[i] ? CFG.FOG_MEMORY * 0.57 : 0.72;  // 一圈过渡，避免边缘太生硬
+      } else {
+        a = explored[i] ? CFG.FOG_MEMORY : 1;            // 去过 = 残影；没去过 = 纯黑
+      }
+
+      if (a > 0) {
+        fx.fillStyle = a >= 1 ? '#000000' : 'rgba(0,0,0,' + a + ')';
+        fx.fillRect(cx * CELL, cy * CELL, CELL, CELL);
+      }
+    }
+  }
+
+  function resetFog() {
+    explored.fill(0);
+    fx.clearRect(0, 0, SIZE, SIZE);
+    rebuildFog();
   }
 
   function isDark(hex) {
@@ -119,6 +167,8 @@
   // ==================== 主循环 ====================
   function render(now) {
     ctx.drawImage(bgc, 0, 0);
+    // 迷雾盖在迷宫之上，但终点与主角都画在迷雾之后 —— 红格永远可见
+    if (fogOn && (state === 'playing' || state === 'win')) ctx.drawImage(fogc, 0, 0);
     if (exitI >= 0 && (state === 'playing' || state === 'win')) drawExit(now);
     if (state === 'playing' || state === 'win') drawPlayer(now);
     if (state === 'playing') hudTime.textContent = fmt(performance.now() - startTime);
@@ -134,13 +184,16 @@
     if (ac && ac.state === 'suspended') ac.resume();
   }
   function beep(freq, dur, type, vol) {
-    if (!ac) return;
+    if (!ac || masterVol <= 0) return;
     var t = ac.currentTime;
+    // 以默认音量（60%）为 1.0 基准，滑杆拉满时更响、拉到 0 则静音
+    var peak = (vol || CFG.BEEP_VOL) * (masterVol / (CFG.VOL_DEFAULT / 100));
+    peak = Math.max(0.0002, Math.min(1, peak));
     var o = ac.createOscillator(), g = ac.createGain();
     o.type = type || 'square';
     o.frequency.value = freq;
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol || CFG.BEEP_VOL, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g); g.connect(ac.destination);
     o.start(t); o.stop(t + dur + 0.03);
@@ -311,6 +364,7 @@
     steps = 0;
     elapsed = 0;
     startTime = performance.now();
+    resetFog();
     hudSteps.textContent = '0 步';
     hudTime.textContent = '00:00.00';
     hud.classList.add('show');
@@ -330,6 +384,7 @@
     px = nx; py = ny;
     steps++;
     hudSteps.textContent = steps + ' 步';
+    rebuildFog();
     beep(520 + Math.random() * 40, 0.03, 'square', 0.022);
     if (ny * N + nx === exitI) winGame();
   }
@@ -355,6 +410,7 @@
     steps = 0; elapsed = 0;
     grid.fill(1);
     paintAll();
+    resetFog();
     hud.classList.remove('show');
     showOnly(ovStart);
     fit();
@@ -469,6 +525,68 @@
     btnKb.classList.toggle('active', on);
     fit();
   });
+
+  // ==================== 迷雾开关 / 音量控制 ====================
+  function saveSettings() {
+    try {
+      localStorage.setItem('maze_fog', fogOn ? '1' : '0');
+      localStorage.setItem('maze_vol', String(Math.round(masterVol * 100)));
+    } catch (e) { /* 隐私模式或 file:// 下可能被拒，忽略即可 */ }
+  }
+
+  function setVol(v) {
+    v = Math.max(0, Math.min(100, Math.round(v)));
+    masterVol = v / 100;
+    volRange.value = v;
+    muteBtn.classList.toggle('muted', v === 0);
+    muteBtn.setAttribute('aria-label', v === 0 ? '取消静音' : '静音');
+    if (v > 0) lastVol = v;
+  }
+
+  fogBtn.addEventListener('click', function () {
+    ensureAudio();
+    fogOn = !fogOn;
+    fogBtn.setAttribute('aria-pressed', String(fogOn));
+    rebuildFog();
+    saveSettings();
+    beep(780, 0.05, 'sine', 0.03);
+  });
+
+  volRange.addEventListener('input', function () {
+    setVol(parseFloat(volRange.value) || 0);
+    saveSettings();
+  });
+  volRange.addEventListener('change', function () {
+    ensureAudio();
+    setVol(parseFloat(volRange.value) || 0);
+    saveSettings();
+    beep(660, 0.09, 'triangle', 0.05); // 松手时试听一下
+  });
+
+  muteBtn.addEventListener('click', function () {
+    ensureAudio();
+    if (masterVol > 0) {
+      setVol(0);
+    } else {
+      setVol(lastVol || CFG.VOL_DEFAULT);
+      beep(560, 0.08, 'triangle', 0.05);
+    }
+    saveSettings();
+  });
+
+  // 读取上次的音量 / 迷雾设置
+  (function loadSettings() {
+    try {
+      var v = localStorage.getItem('maze_vol');
+      setVol(v === null || v === '' ? CFG.VOL_DEFAULT : parseFloat(v));
+      if (localStorage.getItem('maze_fog') === '1') {
+        fogOn = true;
+        fogBtn.setAttribute('aria-pressed', 'true');
+      }
+    } catch (e) {
+      setVol(CFG.VOL_DEFAULT);
+    }
+  })();
 
   // ==================== 自适应 ====================
   window.addEventListener('resize', fit);

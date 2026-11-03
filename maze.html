@@ -91,6 +91,34 @@
         <button data-dir="right" style="grid-area:r">D</button>
       </div>
 
+      <!-- 虚拟按键下方：迷雾模式 + 音效音量 -->
+      <div class="opts">
+        <button class="chip" id="fogBtn" type="button" aria-pressed="false" title="迷雾模式（终点始终可见）">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"
+                  fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+            <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/>
+          </svg>
+          <span>迷雾</span>
+        </button>
+
+        <div class="vol">
+          <button class="volbtn" id="muteBtn" type="button" aria-label="静音">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 9.4v5.2h3.3L12 18.6V5.4L7.3 9.4H4Z" fill="currentColor"/>
+              <path class="wave" d="M15.3 9.3a3.8 3.8 0 0 1 0 5.4"
+                    fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+              <path class="wave" d="M17.8 7a7.6 7.6 0 0 1 0 10"
+                    fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+              <path class="cross" d="M16.6 9.2 21 13.6M21 9.2 16.6 13.6"
+                    fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <input type="range" id="volRange" min="0" max="100" step="1" value="60"
+                 aria-label="音效音量">
+        </div>
+      </div>
+
       <div class="foot">WASD / ↑↓←→ 移动<br>每按一次走一格 · 踩到红色格通关</div>
     </div>
 

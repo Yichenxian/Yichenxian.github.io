@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#050806">
 <title>迷宫寻路 · 像素迷宫</title>
-<link rel="stylesheet" href="maze.css?v=20261104o">
+<link rel="stylesheet" href="maze.css?v=20261105i">
 </head>
 <body>
 
@@ -19,6 +19,9 @@
     <span>返回</span>
   </a>
   <div class="brand">迷宫寻路</div>
+  <!-- 救命：进入迷宫后才出现，按一下在画面里拉一条通往终点的白线 -->
+  <button class="rescue" id="btnRescue" type="button" hidden aria-pressed="false"
+          title="画一条通往终点的白线">救命</button>
 </header>
 
 <div class="wrap" id="wrap">
@@ -26,6 +29,19 @@
 
     <!-- 游戏画面 + 上方音乐条 -->
     <div class="stagewrap" id="stagewrap">
+
+    <!-- 重新开始：常驻在音乐条上方，随时能退回开始界面（不必通关或刷新） -->
+    <div class="toolbar" id="toolbar">
+      <button class="restart" id="btnRestart" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19 12a7 7 0 1 1-2.2-5.1" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round"/>
+          <path d="M19.4 4.6v4.2h-4.2" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>重新开始</span>
+      </button>
+    </div>
 
     <!-- 背景音乐条：播放/暂停 · 曲名 · 音量 · 上传转 8bit -->
     <div class="musicbar" id="musicbar">
@@ -85,6 +101,22 @@
     <div class="stage" id="stage">
       <canvas id="cv" width="720" height="720"></canvas>
 
+      <!-- QTE：敌人进入视野时弹出。两个方向键（按顺序）+ 倒计时 -->
+      <div class="qte" id="qte" aria-hidden="true">
+        <div class="qte-head"><b>QTE</b><span>按顺序按下</span></div>
+        <div class="qte-keys" id="qteKeys"></div>
+        <div class="qte-time"><i id="qteBar"></i></div>
+        <div class="qte-num" id="qteNum">1.8s</div>
+      </div>
+
+      <!-- 「反击！」提醒：正式判定前 1 秒，敌我定住，给玩家反应时间 -->
+      <div class="qte-warn" id="qteWarn" aria-hidden="true">
+        <div class="qw-inner">
+          <span class="qw-text">反击！</span>
+          <span class="qw-bar"><i id="qteWarnBar"></i></span>
+        </div>
+      </div>
+
       <div class="hud" id="hud">
         <span class="t" id="hudTime">00:00.00</span>
         <span class="fogtag" id="hudFog" hidden>迷雾</span>
@@ -94,7 +126,7 @@
       <!-- 开始 -->
       <div class="overlay show" id="ovStart">
         <div class="title">迷宫寻路</div>
-        <div class="sub">30 × 30 像素迷宫<br>走到红色格即通关</div>
+        <div class="sub">走到红色格即通关<br>终点有红边白眼怪，同一走廊撞见它就要打 QTE</div>
         <button class="btn primary" id="btnStart">开始游戏</button>
       </div>
 
@@ -115,6 +147,8 @@
                    min="30" max="100" step="1" value="30" aria-label="地图大小">
             <b class="field-val" id="sizeVal">30×30</b>
           </label>
+          <div class="field-note" id="sizeNote" hidden>画面会跟随主角移动</div>
+
           <label class="field">
             <span class="field-label">迷雾模式</span>
             <span class="sw">
@@ -122,7 +156,15 @@
               <i></i>
             </span>
           </label>
-          <div class="field-note" id="sizeNote" hidden>画面会跟随主角移动</div>
+
+          <label class="field" id="hintField">
+            <span class="field-label">终点指引</span>
+            <span class="sw">
+              <input type="checkbox" id="hintChk" aria-label="终点指引箭头">
+              <i></i>
+            </span>
+          </label>
+          <div class="field-note" id="hintNote" hidden>出口不在画面内时，边缘出现呼吸红箭头</div>
         </div>
 
         <button class="btn primary" id="btnEnter">进入迷宫</button>
@@ -144,12 +186,30 @@
           <div><span>用时</span><b id="winTime">00:00.00</b></div>
           <div><span>步数</span><b id="winSteps">0</b></div>
         </div>
-        <button class="btn primary" id="btnRestart">重新开始</button>
+        <div class="sub">点上方「重新开始」再来一局</div>
+      </div>
+
+      <!-- 失败：三颗心掉光 -->
+      <div class="overlay" id="ovLose">
+        <div class="title small danger">通关失败</div>
+        <div class="sub">三颗心都被撞光了…</div>
+        <div class="stats">
+          <div><span>坚持</span><b id="loseTime">00:00.00</b></div>
+          <div><span>步数</span><b id="loseSteps">0</b></div>
+        </div>
+        <button class="btn primary" id="btnRetry">再来一局</button>
       </div>
     </div>
     </div><!-- /stagewrap -->
 
     <div class="side" id="side">
+      <!-- 血条：三颗红心，放在游戏画面和「呼出虚拟键盘」按钮之间 -->
+      <div class="hearts" id="hearts" role="img" aria-label="生命值 3 / 3">
+        <span class="heart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.9c-.5 0-1-.2-1.4-.5C6.5 17.1 3 13.7 3 9.7 3 6.6 5.4 4.3 8.2 4.3c1.5 0 2.9.7 3.8 1.9.9-1.2 2.3-1.9 3.8-1.9C18.6 4.3 21 6.6 21 9.7c0 4-3.5 7.4-7.6 10.7-.4.3-.9.5-1.4.5z"/></svg></span>
+        <span class="heart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.9c-.5 0-1-.2-1.4-.5C6.5 17.1 3 13.7 3 9.7 3 6.6 5.4 4.3 8.2 4.3c1.5 0 2.9.7 3.8 1.9.9-1.2 2.3-1.9 3.8-1.9C18.6 4.3 21 6.6 21 9.7c0 4-3.5 7.4-7.6 10.7-.4.3-.9.5-1.4.5z"/></svg></span>
+        <span class="heart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.9c-.5 0-1-.2-1.4-.5C6.5 17.1 3 13.7 3 9.7 3 6.6 5.4 4.3 8.2 4.3c1.5 0 2.9.7 3.8 1.9.9-1.2 2.3-1.9 3.8-1.9C18.6 4.3 21 6.6 21 9.7c0 4-3.5 7.4-7.6 10.7-.4.3-.9.5-1.4.5z"/></svg></span>
+      </div>
+
       <button class="btn ghost" id="btnKb">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="2" y="6" width="20" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
@@ -192,15 +252,17 @@
       <div class="foot">
         WASD / ↑↓←→ 移动<br>
         每按一次走一格 · 踩到红色格通关<br>
-        点 <b class="foot-key">8BIT</b> 切换 8bit / 原声
+        同一走廊撞见怪物会先闪 <b class="foot-key">反击！</b>，再按顺序按对两个方向键它就裂开<br>
+        按错/超时 → 它变红加速追人，撞一下掉一颗心<br>
+        点 <b class="foot-key">8BIT</b> 切 8bit / 原声 · 点右上角 <b class="foot-key">救命</b> 拉白线
       </div>
     </div>
 
   </div>
 </div>
 
-<script src="bitcrush.js?v=20261104o"></script>
-<script src="maze.js?v=20261104o"></script>
-<script src="maze-music.js?v=20261104o"></script>
+<script src="bitcrush.js?v=20261105i"></script>
+<script src="maze.js?v=20261105i"></script>
+<script src="maze-music.js?v=20261105i"></script>
 </body>
 </html>

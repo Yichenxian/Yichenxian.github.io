@@ -6,7 +6,7 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 :root {
-  --accent: #35e07a;
+  /* 品牌绿 #35e07a 在各处 rgba() 里按透明度用到，这里只留两个实色档 */
   --accent-2: #5ff59b;
   --text: #e6f7ec;
   --muted: #8fb9a1;
@@ -73,6 +73,48 @@ body {
   white-space: nowrap;
 }
 
+/* 右上角「救命」：只有进了迷宫才出现（JS 用 hidden 控制） */
+.rescue {
+  grid-column: 3;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 15px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-indent: .1em;
+  color: #fff;
+  background: linear-gradient(180deg, #ff5f5f, #d21f1f);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(255, 45, 45, .38), inset 0 1px 0 rgba(255, 255, 255, .28);
+  transition: transform .1s ease, box-shadow .18s ease, background .18s ease;
+  touch-action: manipulation;
+}
+.rescue:hover { background: linear-gradient(180deg, #ff7676, #e02828); }
+.rescue:active { transform: scale(.94); }
+.rescue:focus-visible { outline: 2px solid #ffd0d0; outline-offset: 2px; }
+.rescue[hidden] { display: none; }
+
+/* 指引线开着的时候：白圈 + 更亮的红光，一眼能看出是「已开启」 */
+.rescue.on {
+  background: linear-gradient(180deg, #ff8585, #e02828);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, .7),
+    0 6px 22px rgba(255, 45, 45, .65),
+    inset 0 1px 0 rgba(255, 255, 255, .35);
+  animation: rescuePulse 1.6s ease-in-out infinite;
+}
+@keyframes rescuePulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 255, 255, .7), 0 6px 22px rgba(255, 45, 45, .6), inset 0 1px 0 rgba(255, 255, 255, .35); }
+  50% { box-shadow: 0 0 0 3px rgba(255, 255, 255, .95), 0 6px 26px rgba(255, 45, 45, .9), inset 0 1px 0 rgba(255, 255, 255, .35); }
+}
+
 /* ===== 主体区域（flex:1 撑满剩余高度，画面在其中居中） ===== */
 .wrap {
   flex: 1 1 0;
@@ -132,6 +174,46 @@ canvas#cv {
   gap: 8px;
   width: min(92vw, 560px);
   min-width: 0;
+}
+
+/* ===== 工具条（音乐条上方：常驻的「重新开始」） ===== */
+.toolbar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: min(92vw, 560px);
+  height: 28px;
+  padding: 0 2px;
+}
+
+.restart {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 11px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: #b9f5cd;
+  background: rgba(53, 224, 122, .07);
+  border: 1px solid rgba(53, 224, 122, .3);
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background .16s ease, color .16s ease, transform .1s ease, opacity .16s ease;
+}
+.restart svg { width: 13px; height: 13px; flex: none; }
+.restart:hover { background: rgba(53, 224, 122, .16); color: #dcffe9; }
+.restart:active { transform: scale(.95); }
+.restart:focus-visible { outline: 2px solid #8dffc0; outline-offset: 2px; }
+/* 已经在开始界面时无事可做：淡出但保留占位，避免开场瞬间画面尺寸跳动 */
+.restart[disabled] {
+  opacity: 0;
+  pointer-events: none;
+  cursor: default;
 }
 
 /* ===== 背景音乐条（游戏画面正上方） ===== */
@@ -379,7 +461,8 @@ canvas#cv {
   display: none;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* safe center：内容比舞台高时自动退回顶端对齐，否则顶部会被裁掉且滚不到 */
+  justify-content: safe center;
   gap: 10px;
   padding: 14px;
   text-align: center;
@@ -388,6 +471,21 @@ canvas#cv {
   -webkit-backdrop-filter: blur(7px);
   backdrop-filter: blur(7px);
 }
+
+/* 舞台偏小时（窄屏手机）整套设置再收一档，保证一屏放得下 */
+.overlay.compact {
+  gap: 6px;
+  padding: 10px;
+}
+.overlay.compact .preview { width: 30px; height: 30px; }
+.overlay.compact .swatches { gap: 5px; max-width: 224px; }
+.overlay.compact .swatch { width: 24px; height: 24px; }
+.overlay.compact .picker { font-size: 11.5px; gap: 7px; }
+.overlay.compact input[type="color"] { width: 34px; height: 24px; }
+.overlay.compact .fields { gap: 5px; }
+.overlay.compact .field { font-size: 12px; }
+.overlay.compact .btn.primary { padding: 10px 24px; font-size: 15px; box-shadow: 0 4px 0 #0f6b38, 0 8px 20px rgba(53, 224, 122, .3); }
+.overlay.compact .btn.link { font-size: 11.5px; padding: 2px 6px; }
 .overlay.show { display: flex; animation: fade .22s ease; }
 @keyframes fade { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
 
@@ -565,6 +663,194 @@ input[type="color"]::-moz-color-swatch {
   letter-spacing: .04em;
 }
 
+/* ===== 血条（游戏画面与「呼出虚拟键盘」按钮之间：三颗红心） ===== */
+.hearts {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 24px;
+  /* 非游戏状态淡下去但不断层：layout 高度恒定，stage 尺寸才不会在开局时跳一下 */
+  opacity: .24;
+  transition: opacity .28s ease;
+}
+.hearts.live { opacity: 1; }
+
+.heart {
+  display: block;
+  width: 21px;
+  height: 21px;
+  line-height: 0;
+  transform-origin: 50% 55%;
+}
+.heart svg { display: block; width: 100%; height: 100%; }
+.heart path {
+  fill: #ff3b4e;
+  filter: drop-shadow(0 0 5px rgba(255, 59, 78, .55));
+  transition: fill .2s ease, filter .2s ease;
+}
+/* 掉血：变成暗色空心 */
+.heart.off path { fill: rgba(255, 255, 255, .13); filter: none; }
+
+.hearts.live .heart:not(.off) { animation: heartBeat 2.8s ease-in-out infinite; }
+.hearts.live .heart.off { animation: none; }
+@keyframes heartBeat {
+  0%, 88%, 100% { transform: scale(1); }
+  92% { transform: scale(1.16); }
+  96% { transform: scale(1); }
+}
+
+/* ===== 「反击！」提醒（正式 QTE 前 1 秒，敌我定住） ===== */
+.qte-warn {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .12s ease;
+  /* 底下一层很淡的暗角，把注意力压到中间的字上 */
+  background: radial-gradient(closest-side, rgba(0, 0, 0, .42), rgba(0, 0, 0, 0) 78%);
+}
+.qte-warn.show { opacity: 1; }
+
+.qw-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.qte-warn.show .qw-inner { animation: qwSlam .36s cubic-bezier(.18, 1.7, .42, 1) both; }
+@keyframes qwSlam {
+  0%   { transform: scale(1.7); opacity: 0; }
+  55%  { opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.qw-text {
+  font-size: clamp(30px, 10vmin, 52px);
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-indent: .12em;
+  line-height: 1;
+  color: #fff;
+  text-shadow:
+    0 0 10px rgba(255, 45, 45, .95),
+    0 0 28px rgba(255, 45, 45, .8),
+    0 0 60px rgba(255, 45, 45, .55);
+}
+
+.qw-bar {
+  display: block;
+  width: clamp(96px, 34vmin, 168px);
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .16);
+  overflow: hidden;
+}
+.qw-bar i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #fff2f2, #ff3b3b);
+  box-shadow: 0 0 10px rgba(255, 60, 60, .9);
+}
+
+/* ===== QTE 面板（画面内，敌人进入视野时弹出） ===== */
+.qte {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px 8px;
+  border-radius: 12px;
+  background: rgba(8, 14, 11, .84);
+  border: 1px solid rgba(255, 70, 70, .5);
+  box-shadow: 0 0 26px rgba(255, 45, 45, .26), inset 0 1px 0 rgba(255, 255, 255, .05);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+.qte.show { opacity: 1; transform: translate(-50%, 0); }
+
+.qte-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  letter-spacing: .08em;
+  color: #ffb3b3;
+}
+.qte-head b {
+  padding: 1px 5px;
+  font-size: 9.5px;
+  letter-spacing: .12em;
+  color: #1a0505;
+  background: linear-gradient(180deg, #ff8a8a, #e02323);
+  border-radius: 4px;
+}
+
+.qte-keys { display: flex; align-items: center; gap: 6px; }
+.qkey {
+  display: grid;
+  place-items: center;
+  width: clamp(30px, 8.2vmin, 40px);
+  height: clamp(30px, 8.2vmin, 40px);
+  font-size: clamp(15px, 4.4vmin, 19px);
+  font-weight: 800;
+  line-height: 1;
+  color: #ffecec;
+  background: rgba(255, 255, 255, .07);
+  border: 1.5px solid rgba(255, 100, 100, .6);
+  border-radius: 9px;
+  transition: background .1s ease, border-color .1s ease, color .1s ease;
+}
+.qkey-sep { font-size: 13px; font-weight: 800; color: #ff7a7a; }
+/* 下一个该按的键闪一下，提示「按到第几个了」 */
+.qkey.next { border-color: #fff; box-shadow: 0 0 12px rgba(255, 90, 90, .7); }
+.qkey.done {
+  color: #04170c;
+  background: linear-gradient(180deg, #43ec8b, #1fa85c);
+  border-color: transparent;
+}
+
+.qte-time {
+  width: clamp(96px, 26vmin, 140px);
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .12);
+  overflow: hidden;
+}
+.qte-time i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #ffd93d, #ff3b3b);
+}
+.qte-num {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 10.5px;
+  letter-spacing: .1em;
+  color: #ffb3b3;
+}
+
+/* 失败标题：换成红色渐变 */
+.title.danger {
+  background: linear-gradient(180deg, #ffe1e1, #ff3b3b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 18px rgba(255, 45, 45, .5));
+}
+
 /* ===== 虚拟键盘 ===== */
 .pad {
   display: none;
@@ -614,6 +900,10 @@ input[type="color"]::-moz-color-swatch {
 }
 
 .field-label { white-space: nowrap; }
+
+/* 当前设置下不会生效的开关（如小地图时的终点指引）：整行淡出，但仍可点 */
+.field.dim { opacity: .42; transition: opacity .18s ease; }
+.field.dim:hover { opacity: .7; }
 
 .field-val {
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;

@@ -21,9 +21,14 @@
     --text-dim: rgba(246, 248, 252, 0.7);
     --ease: cubic-bezier(0.22, 1, 0.36, 1);
     --radius: 22px;
+    --focus-ring: #8dffc0;
+    /* 输入框聚焦绿，写成 RGB 分量供 rgba() 复用 */
+    --green-rgb: 75, 238, 145;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* .view 自身没有 display 声明，UA 的 [hidden] 规则即可生效，无需 !important */
+  [hidden] { display: none; }
 
   html, body { height: 100%; }
 
@@ -36,6 +41,8 @@
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
   }
+  /* 留言界面较高时允许整页滚动，避免小屏被裁掉 */
+  body.message-open { overflow-x: hidden; overflow-y: auto; }
 
   /* 背景图：完整居中显示（contain 不裁切，任何屏幕都能看到整张图） */
   .bg {
@@ -76,7 +83,7 @@
     transition: opacity 0.55s var(--ease), transform 0.55s var(--ease);
   }
 
-  /* 半透明玻璃文字框 */
+  /* 半透明玻璃文字框：首页与留言界面共用同一个框 */
   .card {
     width: min(560px, 88vw);
     padding: clamp(26px, 5vw, 56px);
@@ -90,12 +97,12 @@
     animation: rise 0.9s var(--ease) both;
   }
 
+  /* h1 / p 不可聚焦，不写 outline:none，避免将来加可编辑内容时丢掉焦点环 */
   .card h1 {
     font-size: clamp(1.5rem, 5.5vw, 2.4rem);
     font-weight: 600;
     letter-spacing: 0.04em;
     line-height: 1.3;
-    outline: none;
   }
 
   .card p {
@@ -103,7 +110,6 @@
     font-size: clamp(0.95rem, 3.4vw, 1.1rem);
     line-height: 1.7;
     color: var(--text-dim);
-    outline: none;
   }
 
   /* 待定占位样式：较低透明度 + 淡虚线，仅作“内容未定”的视觉提示（不可在网页内编辑） */
@@ -112,44 +118,167 @@
     border-bottom: 1px dotted rgba(246, 248, 252, 0.35);
   }
 
-  .hint {
-    margin-top: 1.4em;
-    font-size: 0.78rem;
-    letter-spacing: 0.08em;
-    color: rgba(246, 248, 252, 0.5);
+  /* 两个入口按钮：等宽、并排、同一套绿色胶囊样式 */
+  .actions {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 1.6em;
   }
+  .actions .play-btn { flex: 1 1 0; min-width: 0; max-width: 220px; }
 
-  /* 去玩迷宫：绿色入口按钮 */
+  /* 绿色主按钮（<a> 与 <button> 共用） */
   .play-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 9px;
-    margin-top: 1.6em;
     padding: 13px 30px;
     font-family: inherit;
     font-size: clamp(0.95rem, 3.4vw, 1.05rem);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-indent: 0.1em;
+    line-height: 1.3;
+    white-space: nowrap;
     color: #04170c;
     text-decoration: none;
+    text-align: center;
     background: linear-gradient(180deg, #4bee91, #1fa85c);
+    border: 0;
     border-radius: 999px;
     box-shadow: 0 8px 24px rgba(53, 224, 122, 0.34),
                 inset 0 1px 0 rgba(255, 255, 255, 0.38);
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
     transition: transform 0.2s var(--ease), box-shadow 0.25s var(--ease),
-                background 0.25s var(--ease);
+                background 0.25s var(--ease), opacity 0.2s var(--ease);
   }
-  .play-btn:hover {
+  /* 只在可交互状态响应 hover/active：发送中按钮被禁用时不应变亮或位移 */
+  .play-btn:not(:disabled):hover {
     background: linear-gradient(180deg, #5ef9a0, #23b864);
     transform: translateY(-2px);
     box-shadow: 0 12px 32px rgba(53, 224, 122, 0.48),
                 inset 0 1px 0 rgba(255, 255, 255, 0.45);
   }
-  .play-btn:active { transform: translateY(0) scale(0.98); }
-  .play-btn:focus-visible { outline: 2px solid #8dffc0; outline-offset: 4px; }
+  .play-btn:not(:disabled):active { transform: translateY(0) scale(0.98); }
+  .play-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; }
   .play-btn svg { width: 17px; height: 17px; display: block; flex: none; }
+  .play-btn:disabled { opacity: 0.62; cursor: default; box-shadow: 0 8px 24px rgba(53, 224, 122, 0.2); }
+
+  /* 次要按钮：描边玻璃胶囊（返回） */
+  .ghost-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 24px;
+    font-family: inherit;
+    font-size: clamp(0.92rem, 3.2vw, 1rem);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1.3;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    border-radius: 999px;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    transition: transform 0.2s var(--ease), background 0.25s var(--ease),
+                opacity 0.2s var(--ease);
+  }
+  .ghost-btn:not(:disabled):hover { background: rgba(255, 255, 255, 0.17); transform: translateY(-2px); }
+  .ghost-btn:not(:disabled):active { transform: translateY(0) scale(0.98); }
+  .ghost-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+  .ghost-btn svg { width: 16px; height: 16px; display: block; flex: none; }
+  .ghost-btn:disabled { opacity: 0.5; cursor: default; }
+
+  /* ---------- 留言界面（仍在同一个透明框内） ---------- */
+  .msg-view { text-align: left; }
+
+  .msg-heading {
+    text-align: center;
+    font-size: clamp(1.2rem, 4.6vw, 1.6rem);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    margin-bottom: 1.1em;
+  }
+
+  .field-label {
+    display: block;
+    margin: 0 0 0.5em;
+    font-size: 0.84rem;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+  }
+  .field-group { margin-bottom: 1.05em; }
+
+  .field {
+    display: block;
+    width: 100%;
+    padding: 12px 14px;
+    font-family: inherit;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.09);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 12px;
+    outline: none;
+    transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease),
+                background 0.2s var(--ease);
+  }
+  .field::placeholder { color: rgba(246, 248, 252, 0.45); }
+  .field:focus {
+    background: rgba(255, 255, 255, 0.13);
+    border-color: rgba(var(--green-rgb), 0.85);
+    box-shadow: 0 0 0 3px rgba(var(--green-rgb), 0.16);
+  }
+  /* 正文框刻意做得更大，方便通读检查；可向下拖拽继续放大，下限 150px */
+  textarea.field {
+    height: clamp(150px, 25vh, 220px);
+    min-height: 150px;
+    resize: vertical;
+  }
+
+  .counter {
+    margin-top: 0.4em;
+    text-align: right;
+    font-size: 0.76rem;
+    letter-spacing: 0.06em;
+    color: rgba(246, 248, 252, 0.45);
+  }
+
+  .msg-status {
+    min-height: 1.35em;
+    margin: 0.65em 0 0.35em;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text-dim);
+  }
+  .msg-status.ok { color: #7bf0aa; }
+  .msg-status.err { color: #ff9b9b; }
+  .msg-status.pending { color: #ffe08a; }
+
+  .msg-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  /* 左右两枚按钮取同一最小宽度，视觉上对齐 */
+  .msg-footer .play-btn,
+  .msg-footer .ghost-btn { min-width: 128px; }
+
+  /* 视图切换时的淡入上移 */
+  .view.enter { animation: viewIn 0.42s var(--ease) both; }
+  @keyframes viewIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
 
   /* 右上角切换按钮 */
   .toggle {
@@ -175,7 +304,7 @@
   }
   .toggle:hover { background: rgba(24, 46, 34, 0.72); }
   .toggle:active { transform: scale(0.96); }
-  .toggle:focus-visible { outline: 2px solid #8dffc0; outline-offset: 3px; }
+  .toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
   .toggle svg { width: 18px; height: 18px; display: block; }
 
   .toggle .icon-hidden { display: none; }
@@ -202,8 +331,24 @@
     to   { opacity: 1; transform: translateY(0); }
   }
 
+  /* 窄屏：两个按钮仍然并排，缩小内边距保证不换行 */
+  @media (max-width: 420px) {
+    .card { width: min(560px, 92vw); padding: 22px 18px; }
+    .actions { gap: 10px; }
+    .actions .play-btn {
+      padding: 12px 10px;
+      gap: 6px;
+      font-size: 0.92rem;
+      letter-spacing: 0.02em;
+      text-indent: 0.02em;
+    }
+    .actions .play-btn svg { width: 15px; height: 15px; }
+    .msg-footer .play-btn,
+    .msg-footer .ghost-btn { min-width: 0; padding-left: 18px; padding-right: 18px; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .card { animation: none; }
+    .card, .view.enter { animation: none; }
     * { transition-duration: 0.01ms !important; }
   }
 </style>
@@ -215,23 +360,77 @@
   <!-- 暗化渐变（隐藏内容时消失） -->
   <div class="overlay" aria-hidden="true"></div>
 
-  <!-- 居中半透明文字框（内容待定，可直接点击编辑） -->
+  <!-- 居中半透明框：首页 / 留言界面共用 -->
   <main class="stage">
     <section class="card">
-      <!-- 可修改区域 2：标题（待定文字，只能在源文件里改） -->
-      <h1 class="placeholder">野兽先辈</h1>
-      <!-- 可修改区域 3：说明文字（只能在源文件里改） -->
-      <p class="placeholder">这个背景图是野兽先辈，他是日本淫梦文化的著名人物，名字是田所浩二</p>
 
-      <!-- 去玩迷宫：跳转到小游戏页面 -->
-      <a class="play-btn" href="maze.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="3" y="3" width="18" height="18" rx="2.5"/>
-          <path d="M7 7h2v2H7zM7 11h2v2H7zM7 15h2v2H7zM11 7h2v6h-2zM15 11h2v2h-2z"/>
-        </svg>
-        <span>去玩迷宫</span>
-      </a>
+      <!-- 首页视图（首屏只跑 .card 的 rise，不叠加视图入场动画） -->
+      <div class="view" id="homeView">
+        <!-- 可修改区域 2：标题（待定文字，只能在源文件里改） -->
+        <h1 class="placeholder">野兽先辈</h1>
+        <!-- 可修改区域 3：说明文字（只能在源文件里改） -->
+        <p class="placeholder">这个背景图是野兽先辈，他是日本淫梦文化的著名人物，名字是田所浩二</p>
+
+        <div class="actions">
+          <!-- 去玩迷宫：跳转到小游戏页面 -->
+          <a class="play-btn" href="maze.html">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="2.5"/>
+              <path d="M7 7h2v2H7zM7 11h2v2H7zM7 15h2v2H7zM11 7h2v6h-2zM15 11h2v2h-2z"/>
+            </svg>
+            <span>去玩迷宫</span>
+          </a>
+          <!-- 去写留言：在同一个透明框内切换到留言界面 -->
+          <button class="play-btn" id="openMessage" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="14" rx="2.5"/>
+              <path d="m3.6 6.6 8.4 6 8.4-6"/>
+            </svg>
+            <span>去写留言</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 留言界面视图 -->
+      <div class="view msg-view" id="messageView" hidden>
+        <h2 class="msg-heading">写留言</h2>
+
+        <div class="field-group">
+          <label class="field-label" for="msgTitle">标题</label>
+          <input class="field" id="msgTitle" type="text" maxlength="60"
+                 placeholder="给留言起个标题" autocomplete="off" />
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="msgBody">正文</label>
+          <textarea class="field" id="msgBody" maxlength="2000"
+                    placeholder="写下你想说的话……"></textarea>
+          <div class="counter"><span id="bodyCount">0</span> / 2000</div>
+        </div>
+
+        <div class="msg-status" id="msgStatus" role="status" aria-live="polite"></div>
+
+        <div class="msg-footer">
+          <button class="ghost-btn" id="msgBack" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 12H5m6-6-6 6 6 6"/>
+            </svg>
+            <span>返回</span>
+          </button>
+          <button class="play-btn" id="msgSend" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M22 2 11 13"/>
+              <path d="M22 2 15 22l-4-9-9-4 20-7Z"/>
+            </svg>
+            <span>发送</span>
+          </button>
+        </div>
+      </div>
+
     </section>
   </main>
 
@@ -258,24 +457,144 @@
 
   <script>
     (function () {
-      var body = document.body;
+      var bodyEl = document.body;   // 与下面的 bodyInput 区分开，避免看错
       var toggle = document.getElementById("toggle");
       var restore = document.getElementById("restoreLayer");
       var label = toggle.querySelector(".toggle-label");
 
       function setHidden(hidden) {
-        body.classList.toggle("content-hidden", hidden);
+        bodyEl.classList.toggle("content-hidden", hidden);
         toggle.setAttribute("aria-pressed", String(hidden));
         toggle.setAttribute("aria-label", hidden ? "显示全部内容" : "隐藏全部内容");
         label.textContent = hidden ? "显示内容" : "隐藏内容";
       }
 
       toggle.addEventListener("click", function () {
-        setHidden(!body.classList.contains("content-hidden"));
+        setHidden(!bodyEl.classList.contains("content-hidden"));
       });
 
       // 隐藏状态下，轻触任意位置恢复
       restore.addEventListener("click", function () { setHidden(false); });
+
+      /* ---------------- 留言界面 ----------------
+         QuickForm 接受任意字段名，这里固定提交 title / content；
+         该接口已放行 CORS，GitHub Pages 上可直接跨域 fetch POST。 */
+      var API = "https://quickform.cn/api/xsde0k7nxp";
+      var homeView = document.getElementById("homeView");
+      var msgView = document.getElementById("messageView");
+      var openBtn = document.getElementById("openMessage");
+      var backBtn = document.getElementById("msgBack");
+      var sendBtn = document.getElementById("msgSend");
+      var titleInput = document.getElementById("msgTitle");
+      var bodyInput = document.getElementById("msgBody");
+      var counter = document.getElementById("bodyCount");
+      var status = document.getElementById("msgStatus");
+      var sendLabel = sendBtn.querySelector("span");
+      var busy = false;          // 发送状态唯一来源，按钮禁用由 setBusy 统一处理
+      var backTimer = null;      // 发送成功后自动回首页
+      var focusTimer = null;     // 进入留言界面后延迟聚焦标题框
+
+      function setStatus(text, kind) {
+        status.textContent = text || "";
+        status.className = "msg-status" + (kind ? " " + kind : "");
+      }
+
+      function updateCount() { counter.textContent = String(bodyInput.value.length); }
+
+      function showView(name) {
+        var isMsg = name === "message";
+        homeView.hidden = isMsg;
+        msgView.hidden = !isMsg;
+        bodyEl.classList.toggle("message-open", isMsg);
+        var v = isMsg ? msgView : homeView;
+        v.classList.remove("enter");
+        void v.offsetWidth;              // 强制重排，让入场动画每次都重放
+        v.classList.add("enter");
+      }
+
+      function goHome() {
+        clearTimeout(backTimer);
+        clearTimeout(focusTimer);   // 快速返回时，别再聚焦已隐藏的输入框
+        setStatus("");
+        showView("home");
+        openBtn.focus({ preventScroll: true });
+      }
+
+      function setBusy(on) {
+        busy = on;
+        sendBtn.disabled = on;
+        backBtn.disabled = on;
+        sendLabel.textContent = on ? "发送中…" : "发送";
+      }
+
+      openBtn.addEventListener("click", function () {
+        clearTimeout(backTimer);
+        clearTimeout(focusTimer);
+        setStatus("");
+        showView("message");
+        focusTimer = setTimeout(function () {
+          try { titleInput.focus({ preventScroll: true }); } catch (e) { titleInput.focus(); }
+        }, 260);
+      });
+
+      // 发送中 backBtn 处于 disabled，click 不会派发，无需重复判断 busy
+      backBtn.addEventListener("click", goHome);
+
+      bodyInput.addEventListener("input", updateCount);
+
+      // Esc 返回 / Ctrl+Enter 发送
+      document.addEventListener("keydown", function (e) {
+        if (msgView.hidden || busy) return;
+        if (e.key === "Escape") { backBtn.click(); }
+        else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendBtn.click(); }
+      });
+
+      function send() {
+        if (busy) return;
+        var title = titleInput.value.trim();
+        var content = bodyInput.value.trim();
+        if (!title) { setStatus("请先填写标题", "err"); titleInput.focus(); return; }
+        if (!content) { setStatus("请先填写正文", "err"); bodyInput.focus(); return; }
+
+        setBusy(true);
+        setStatus("正在发送…", "pending");
+
+        var ctrl = new AbortController();
+        var timer = setTimeout(function () { ctrl.abort(); }, 15000);
+        var opts = {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: title, content: content }),
+          signal: ctrl.signal
+        };
+
+        fetch(API, opts).then(function (res) {
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.text();
+        }).then(function (text) {
+          var data = null;
+          try { data = JSON.parse(text); } catch (e) { /* 非 JSON 响应：2xx 即视为成功 */ }
+          if (data && (data.success === false || data.status === "error" || data.error)) {
+            throw new Error(data.message || data.error || "提交被拒绝");
+          }
+          // 成功：清空草稿、提示、稍后自动回到首页
+          titleInput.value = "";
+          bodyInput.value = "";
+          updateCount();
+          setStatus("留言已送出，谢谢！", "ok");
+          backTimer = setTimeout(goHome, 1600);
+        }).catch(function (err) {
+          var msg = err && err.name === "AbortError"
+            ? "请求超时，请稍后重试"
+            : (err && err.message ? err.message : "网络异常，请检查网络后重试");
+          setStatus("发送失败：" + msg, "err");
+        }).finally(function () {   // 成功/失败都要解锁按钮并撤掉超时计时器
+          clearTimeout(timer);
+          setBusy(false);
+        });
+      }
+
+      sendBtn.addEventListener("click", send);
     })();
   </script>
 </body>

@@ -419,14 +419,20 @@ canvas#cv {
 .musicbar.compact .mb-vol { border-left: none; }
 .musicbar.tiny .mb-eq { display: none; }
 
-/* ===== HUD（放在画面底部：最下面两行永远是绿墙，不挡通路） ===== */
+/* ===== HUD（画面下缘的状态条：与画面同宽、零间隙，不再盖住地形） ===== */
 .hud {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: -8px;             /* 抵消 .stagewrap 的 gap，真正贴住画面底边 */
   display: none;
   justify-content: space-between;
-  align-items: flex-end;
-  padding: 7px 8px;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px 8px;
+  border: 1px solid rgba(53, 224, 122, .26);
+  border-radius: 0 0 14px 14px;
+  background: linear-gradient(180deg, rgba(9, 22, 15, .94), rgba(4, 10, 7, .94));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .5);
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
   font-size: 12px;
   letter-spacing: .04em;
@@ -437,10 +443,10 @@ canvas#cv {
 .hud span {
   padding: 3px 8px;
   border-radius: 7px;
-  background: rgba(0, 0, 0, .66);
-  border: 1px solid rgba(53, 224, 122, .22);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .5);
+  background: rgba(0, 0, 0, .5);
+  border: 1px solid rgba(53, 224, 122, .2);
   line-height: 1.2;
+  white-space: nowrap;           /* 状态条绝不能折行，否则会被撑高、反过来挤小画面 */
 }
 .hud .t { color: var(--accent-2); font-weight: 700; }
 .hud .fogtag {
@@ -453,6 +459,46 @@ canvas#cv {
   border-color: rgba(53, 224, 122, .5);
 }
 .hud .fogtag[hidden] { display: none; }
+
+/* 320px 级窄屏：状态条跟着画面一起变窄，收一档字号和内边距，
+   让计时 / 迷雾 / 步数三项仍能并排放在一行里 */
+@media (max-width: 360px) {
+  .hud { gap: 3px; padding: 5px 4px 6px; font-size: 9.5px; }
+  .hud span { padding: 2px 4px; }
+  .hud .fogtag { padding: 2px 4px; font-size: 9px; letter-spacing: .04em; text-indent: .04em; }
+}
+
+/* ===== 拾取宝物提示：贴在画面底部，不挡顶部的 QTE =====
+   HUD 已经移到画面下方，所以不再需要为它留 44px 的空档 */
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  z-index: 5;
+  transform: translateX(-50%);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - 20px);
+  padding: 7px 14px 8px;
+  border-radius: 10px;
+  background: rgba(8, 16, 11, .93);
+  border: 1px solid rgba(255, 212, 90, .65);
+  box-shadow: 0 0 18px rgba(255, 212, 90, .22);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: toastIn .18s ease-out;
+}
+.toast.show { display: flex; }
+.toast b { font-size: 13px; font-weight: 700; color: #ffd45a; letter-spacing: .08em; }
+.toast span { font-size: 11.5px; color: var(--muted); }
+.toast.bad { border-color: rgba(255, 90, 90, .7); box-shadow: 0 0 18px rgba(255, 60, 60, .22); }
+.toast.bad b { color: #ff9090; }
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
 
 /* ===== 覆盖层 ===== */
 .overlay {
@@ -653,8 +699,12 @@ input[type="color"]::-moz-color-swatch {
 }
 
 /* ===== 结算 ===== */
-.stats { display: flex; gap: 26px; margin: 2px 0 4px; }
-.stats > div { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+/* 第三格「宝物」进来后允许换行收一档，窄屏也不会把三个数字挤成一团 */
+.stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; margin: 2px 0 4px; }
+.stats > div { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 66px; }
+.overlay.compact .stats { gap: 6px 10px; }
+.overlay.compact .stats > div { min-width: 52px; }
+.overlay.compact .stats b { font-size: 14px; }
 .stats span { font-size: 11.5px; color: var(--muted); letter-spacing: .12em; }
 .stats b {
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;

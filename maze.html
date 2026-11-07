@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#050806">
 <title>迷宫寻路 · 像素迷宫</title>
-<link rel="stylesheet" href="maze.css?v=20261105i">
+<link rel="stylesheet" href="maze.css?v=20261107l">
 </head>
 <body>
 
@@ -117,16 +117,15 @@
         </div>
       </div>
 
-      <div class="hud" id="hud">
-        <span class="t" id="hudTime">00:00.00</span>
-        <span class="fogtag" id="hudFog" hidden>迷雾</span>
-        <span id="hudSteps">0 步</span>
+      <!-- 拾取宝物提示：拿到了什么能力，2 秒后自动收起 -->
+      <div class="toast" id="toast" aria-live="polite" aria-hidden="true">
+        <b id="toastName"></b><span id="toastDesc"></span>
       </div>
 
       <!-- 开始 -->
       <div class="overlay show" id="ovStart">
         <div class="title">迷宫寻路</div>
-        <div class="sub">去找红色终点吧！<br>但是要小心终点附近的敌人！</div>
+        <div class="sub">去找红色终点吧！<br>但是要小心会攻击你的的敌人！</div>
         <button class="btn primary" id="btnStart">开始游戏</button>
       </div>
 
@@ -185,6 +184,7 @@
         <div class="stats">
           <div><span>用时</span><b id="winTime">00:00.00</b></div>
           <div><span>步数</span><b id="winSteps">0</b></div>
+          <div><span>宝物</span><b id="winChests">0 / 4</b></div>
         </div>
         <div class="sub">点上方「重新开始」再来一局</div>
       </div>
@@ -192,13 +192,21 @@
       <!-- 失败：三颗心掉光 -->
       <div class="overlay" id="ovLose">
         <div class="title small danger">通关失败</div>
-        <div class="sub">牡蛎莫牡蛎，鸭蛋摸鸭蛋…</div>
+        <div class="sub">牡蛎莫牡蛎，鸭蛋摸鸭蛋</div>
         <div class="stats">
           <div><span>坚持</span><b id="loseTime">00:00.00</b></div>
           <div><span>步数</span><b id="loseSteps">0</b></div>
+          <div><span>宝物</span><b id="loseChests">0 / 4</b></div>
         </div>
         <button class="btn primary" id="btnRetry">再来一局</button>
       </div>
+    </div><!-- /stage -->
+
+    <!-- 状态条：紧贴游戏画面下缘，在画面之外（不再盖住最下面两行地形） -->
+    <div class="hud" id="hud">
+      <span class="t" id="hudTime">00:00.00</span>
+      <span class="fogtag" id="hudFog" hidden>迷雾</span>
+      <span id="hudSteps">0 步</span>
     </div>
     </div><!-- /stagewrap -->
 
@@ -251,8 +259,10 @@
 
       <div class="foot">
         WASD / ↑↓←→ 移动<br>
-        遇到敌人会先闪 <b class="foot-key">反击！</b>，按顺序按两个方向键来击败它<br>
+        每按一次走一格 · 踩到红色格通关<br>
+        遇到敌人会先闪 <b class="foot-key">反击！</b>，按顺序按两个方向键打败它<br>
         按对有奖励，按错有惩罚<br>
+        岔路尽头有<b class="foot-key">泛黄光的宝物</b>，踩上去获得随机能力（喜）<br>
         点 <b class="foot-key">8BIT</b> 切 8bit / 原声
       </div>
     </div>
@@ -260,8 +270,8 @@
   </div>
 </div>
 
-<script src="bitcrush.js?v=20261105i"></script>
-<script src="maze.js?v=20261105i"></script>
-<script src="maze-music.js?v=20261105i"></script>
+<script src="bitcrush.js?v=20261107l"></script>
+<script src="maze.js?v=20261107l"></script>
+<script src="maze-music.js?v=20261107l"></script>
 </body>
 </html>

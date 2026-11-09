@@ -133,11 +133,18 @@ body {
 }
 
 .side {
+  position: relative;           /* 虚拟键盘浮层的定位锚点（键盘不进 flex 流） */
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
 }
+
+/* 竖屏：给悬在画面下方的 HUD 留出一整行，让状态条正好落在
+   「呼出虚拟键盘」按钮上方、不压住按钮。刻意用 margin 而不是 padding ——
+   offsetHeight 不含 margin，fit() 竖屏扣的是 side.offsetHeight，
+   所以画面尺寸一点不会变。 */
+body:not(.landscape) .side { margin-top: 28px; }
 
 /* 横屏：画面在左，按键在右 */
 body.landscape .app { flex-direction: row; align-items: center; gap: 16px; }
@@ -168,6 +175,7 @@ canvas#cv {
 
 /* ===== 画面 + 音乐条 容器 ===== */
 .stagewrap {
+  position: relative;           /* HUD 是浮层，靠它定位到画面底边内 */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -419,20 +427,23 @@ canvas#cv {
 .musicbar.compact .mb-vol { border-left: none; }
 .musicbar.tiny .mb-eq { display: none; }
 
-/* ===== HUD（画面下缘的状态条：与画面同宽、零间隙，不再盖住地形） ===== */
+/* ===== HUD（计时 / 血条 / 步数：悬在画面下方、正好在「呼出虚拟键盘」上方） =====
+   画面之外、不占布局高度，画面尺寸不受它影响。外层大框与两个文字项的小框
+   都已去掉，只剩一行纯文字 + 中间三颗红心（血条替代了原来的「迷雾」标签）。
+   绝对定位让它不进 flex 流，fit() 不再为它扣高度；top:100% 让顶边贴住画面
+   底边，零间隙、不盖地形。整条状态栏随 .show 一起显隐，所以血条也只在
+   开始游戏后（进入迷宫）才出现，开始界面完全看不到。 */
 .hud {
   box-sizing: border-box;
-  width: 100%;
-  margin-top: -8px;             /* 抵消 .stagewrap 的 gap，真正贴住画面底边 */
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
   display: none;
   justify-content: space-between;
   align-items: center;
   gap: 6px;
   padding: 7px 10px 8px;
-  border: 1px solid rgba(53, 224, 122, .26);
-  border-radius: 0 0 14px 14px;
-  background: linear-gradient(180deg, rgba(9, 22, 15, .94), rgba(4, 10, 7, .94));
-  box-shadow: 0 10px 24px rgba(0, 0, 0, .5);
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
   font-size: 12px;
   letter-spacing: .04em;
@@ -440,36 +451,28 @@ canvas#cv {
   pointer-events: none;
 }
 .hud.show { display: flex; }
+/* 高度太紧的横屏：画面下方已经没有落脚点，才贴回画面内底边，
+   免得三项被视口裁掉。竖屏（桌面 / 手机 / 窄屏）一律保持画面外悬空。 */
+.hud.inside { top: auto; bottom: 0; }
 .hud span {
-  padding: 3px 8px;
-  border-radius: 7px;
-  background: rgba(0, 0, 0, .5);
-  border: 1px solid rgba(53, 224, 122, .2);
   line-height: 1.2;
   white-space: nowrap;           /* 状态条绝不能折行，否则会被撑高、反过来挤小画面 */
 }
 .hud .t { color: var(--accent-2); font-weight: 700; }
-.hud .fogtag {
-  padding: 3px 9px;
-  font-size: 10.5px;
-  letter-spacing: .14em;
-  text-indent: .14em;
-  color: #bff7d3;
-  background: rgba(53, 224, 122, .18);
-  border-color: rgba(53, 224, 122, .5);
-}
-.hud .fogtag[hidden] { display: none; }
+/* 血条占了原来「迷雾」标签的中间位：尺寸收一档，别把状态条撑高、
+   也别在 320px 窄屏里把计时 / 步数挤出一行 */
+.hud .hearts { gap: 5px; height: 18px; }
+.hud .heart { width: 18px; height: 18px; }
 
-/* 320px 级窄屏：状态条跟着画面一起变窄，收一档字号和内边距，
-   让计时 / 迷雾 / 步数三项仍能并排放在一行里 */
+/* 320px 级窄屏：状态条跟着画面一起变窄，字号与红心各收一档 */
 @media (max-width: 360px) {
   .hud { gap: 3px; padding: 5px 4px 6px; font-size: 9.5px; }
-  .hud span { padding: 2px 4px; }
-  .hud .fogtag { padding: 2px 4px; font-size: 9px; letter-spacing: .04em; text-indent: .04em; }
+  .hud .hearts { gap: 3px; height: 15px; }
+  .hud .heart { width: 15px; height: 15px; }
 }
 
 /* ===== 拾取宝物提示：贴在画面底部，不挡顶部的 QTE =====
-   HUD 已经移到画面下方，所以不再需要为它留 44px 的空档 */
+   HUD 悬在画面之外，不需要为它留空档 */
 .toast {
   position: absolute;
   left: 50%;
@@ -713,23 +716,21 @@ input[type="color"]::-moz-color-swatch {
   letter-spacing: .04em;
 }
 
-/* ===== 血条（游戏画面与「呼出虚拟键盘」按钮之间：三颗红心） ===== */
+/* ===== 血条（已并入 HUD 中间，替代原来的「迷雾」标签） =====
+   显隐完全交给 .hud.show：开始界面整条状态栏都不出现，
+   不再靠 opacity 淡出占位（那样还会让非游戏态留一截暗红心）。 */
 .hearts {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  height: 24px;
-  /* 非游戏状态淡下去但不断层：layout 高度恒定，stage 尺寸才不会在开局时跳一下 */
-  opacity: .24;
-  transition: opacity .28s ease;
+  gap: 5px;
+  height: 18px;
 }
-.hearts.live { opacity: 1; }
 
 .heart {
   display: block;
-  width: 21px;
-  height: 21px;
+  width: 18px;
+  height: 18px;
   line-height: 0;
   transform-origin: 50% 55%;
 }
@@ -901,8 +902,18 @@ input[type="color"]::-moz-color-swatch {
   filter: drop-shadow(0 0 18px rgba(255, 45, 45, .5));
 }
 
-/* ===== 虚拟键盘 ===== */
+/* ===== 虚拟键盘（浮在侧栏底部的说明区，不占布局） =====
+   以前键盘排在 .side 的 flex 流里，一展开就把 side 撑高约 120~145px，
+   而 fit() 竖屏扣的正是 side.offsetHeight —— 390 屏画面 356→325、
+   320 屏 177→120，底部内容还被顶出视口。改成绝对定位后 side 尺寸恒定，
+   画面尺寸不受键盘显隐影响；bottom:0 让它正好落在 .foot 那一块上，
+   既不盖迷宫地形，也不碰上方的音量滑块。 */
 .pad {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 2;
+  transform: translateX(-50%);
   display: none;
   gap: 8px;
   grid-template-areas: ". u ." "l d r";
@@ -911,6 +922,8 @@ input[type="color"]::-moz-color-swatch {
   --key: clamp(52px, 14vw, 64px);
 }
 .pad.show { display: grid; animation: fade .18s ease; }
+/* 只隐去说明文字、保留占位：侧栏高度前后完全一致，画面才不会缩 */
+.pad.show ~ .foot { visibility: hidden; }
 .pad button {
   border: 1px solid rgba(53, 224, 122, .32);
   border-radius: 12px;

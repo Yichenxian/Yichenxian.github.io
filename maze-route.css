@@ -1,0 +1,116 @@
+/* ============================================================
+   迷宫寻路 · 路线总结（C 方案：逐步回放）  —  独立样式
+   除结算页的入口按钮 .btn.route-open 外，其余只作用于 #ovRoute 内部，
+   不碰游戏主界面的选择器。主界面 .overlay 负责背景/动画/compact 档位，
+   这里只排内容；所有尺寸集中在一个 300px 的「内容宽」上。
+   ============================================================ */
+
+.route-overlay { gap: 6px; }
+.route-overlay::-webkit-scrollbar { width: 5px; }
+.route-overlay::-webkit-scrollbar-thumb { background: rgba(95, 245, 155, .28); border-radius: 5px; }
+/* overlay 是 flex 列，内容比舞台高时子项默认会被压扁；
+   这里一律不收缩，超出的部分交给 overlay 自己的 overflow-y:auto 滚动。 */
+.route-overlay > * { flex: none; }
+/* 用 .btn.route-open 把特异性提到和 .btn.ghost 同级，才能在后加载的文件里覆盖 */
+.btn.route-open { padding: 9px 20px; font-size: 13px; }
+
+/* 标题行：左边标题 + 右边「返回结算」 */
+.route-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; width: 100%; max-width: 300px; text-align: left;
+}
+.route-title { font-size: clamp(14px, 3.4vmin, 18px); font-weight: 800; letter-spacing: .1em; color: #dff7e8; }
+.route-title small { display: block; font-size: 10.5px; font-weight: 500; letter-spacing: .04em; color: var(--muted); margin-top: 3px; }
+.route-head .btn.link { flex: none; }
+
+/* 地图：正方形，随舞台宽度缩放；canvas 由 JS 按 clientWidth 设像素尺寸 */
+.route-map {
+  position: relative;   /* flex:none 由 .route-overlay > * 统一管，别在这里重复 */
+  width: min(100%, 300px); aspect-ratio: 1 / 1;
+  border-radius: 10px; overflow: hidden;
+  background: #0b1110; border: 1px solid rgba(95, 245, 155, .16);
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, .45);
+}
+.route-map canvas { display: block; width: 100%; height: 100%; }
+
+/* 图例 */
+.route-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; font-size: 10.5px; color: #a9c7b5; }
+.route-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.route-legend i { display: inline-block; width: 14px; height: 4px; border-radius: 3px; }
+.route-legend .lg-c { background: #48d9ff; }
+.route-legend .lg-p { background: #ffb347; }
+.route-legend .lg-t { background: repeating-linear-gradient(90deg, #b98cff 0 4px, transparent 4px 7px); }
+.route-legend .lg-d { width: 8px; height: 8px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px #fff; }
+
+/* 回放控件 */
+.route-player { display: flex; align-items: center; gap: 6px; width: 100%; max-width: 300px; }
+.route-btn {
+  flex: none; cursor: pointer; border: 1px solid rgba(53, 224, 122, .32);
+  background: rgba(53, 224, 122, .08); color: #c8efd7;
+  border-radius: 8px; padding: 6px 9px; font: 700 11.5px/1.2 inherit;
+  white-space: nowrap; touch-action: manipulation;
+}
+.route-btn:hover { background: rgba(53, 224, 122, .2); }
+.route-btn:active { transform: scale(.96); }
+.route-btn.speed { min-width: 34px; }
+.route-player input[type="range"] {
+  flex: 1; min-width: 50px; height: 5px; margin: 0;
+  -webkit-appearance: none; appearance: none;
+  background: rgba(140, 220, 175, .26); border-radius: 4px; outline: none;
+}
+.route-player input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 12px; height: 12px;
+  border: none; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 7px rgba(53, 224, 122, .7);
+  cursor: pointer;
+}
+.route-player input[type="range"]::-moz-range-thumb {
+  width: 12px; height: 12px; border: none; border-radius: 50%;
+  background: var(--accent-2); box-shadow: 0 0 7px rgba(53, 224, 122, .7); cursor: pointer;
+}
+.route-num { flex: none; font: 600 11px/1 ui-monospace, "SFMono-Regular", Consolas, monospace; color: var(--accent-2); white-space: nowrap; }
+
+/* 事件条：随回放进度高亮，超过高度自己滚 */
+.route-events {
+  width: 100%; max-width: 300px; max-height: 72px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 4px; text-align: left;
+}
+.route-events::-webkit-scrollbar { width: 5px; }
+.route-events::-webkit-scrollbar-thumb { background: rgba(95, 245, 155, .25); border-radius: 5px; }
+.route-ev {
+  display: flex; gap: 8px; align-items: baseline; flex: none;
+  font-size: 10.5px; color: #7fa08c; padding: 5px 8px; border-radius: 7px;
+  background: rgba(255, 255, 255, .02); border-left: 2px solid transparent;
+  transition: color .15s, background .15s;
+}
+.route-ev b { flex: none; font: 700 10.5px/1 ui-monospace, Consolas, monospace; color: #a9c7b5; }
+.route-ev.on { color: #ffd8a1; background: rgba(255, 179, 71, .09); border-left-color: #ffb347; }
+.route-ev.on b { color: #ffb347; }
+
+/* 统计条 */
+/* 5 项数字合计约 340px，别限死在 300px，否则会折成两行把结论顶出舞台 */
+.route-kpis { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; width: 100%; }
+.route-kpi {
+  min-width: 64px; padding: 5px 8px; border-radius: 9px;
+  background: rgba(255, 255, 255, .035); border: 1px solid rgba(255, 255, 255, .055);
+}
+.route-kpi span { display: block; font-size: 10px; color: var(--muted); letter-spacing: .08em; }
+.route-kpi b { display: block; font: 700 15px/1.4 ui-monospace, Consolas, monospace; color: #dff7e8; }
+.route-kpi.warn b { color: #ffb347; }
+.route-kpi.good b { color: #48d9ff; }
+.route-verdict { font-size: 10.5px; line-height: 1.55; color: #a9c7b5; max-width: 300px; }
+.route-verdict b { color: #ffb347; font-weight: 700; }
+
+/* 舞台偏小时整套再收一档（compact 由主游戏的 fit() 统一挂上）。
+   地图单独收窄到 244px；标题/文字/控件/统计则放开到舞台全宽 ——
+   小屏上五个回放控件挤在 244px 里会排不下，这一条是有意的，别当冗余删掉。 */
+.overlay.compact .route-map { width: min(100%, 244px); }
+.overlay.compact .route-head,
+.overlay.compact .route-player,
+.overlay.compact .route-events,
+.overlay.compact .route-verdict { max-width: 100%; }
+.overlay.compact .route-events { max-height: 62px; }
+.overlay.compact .route-kpi { min-width: 54px; padding: 4px 7px; }
+.overlay.compact .route-kpi b { font-size: 12.5px; }
+.overlay.compact .route-legend { font-size: 9.5px; gap: 3px 8px; }
+.overlay.compact .route-verdict { font-size: 10px; }
+.overlay.compact .route-title { font-size: 13px; }

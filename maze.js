@@ -3,6 +3,8 @@
    原生 Canvas 2D，无依赖。单文件闭包，不污染全局。
    对外只暴露两个东西：MazeAudio（给音乐模块复用 AudioContext）、
    MazeDebug（只给自动化测试 / 控制台排查用，正常玩法不依赖它）。
+   路线总结是独立模块 maze-route.js：本文件只通过 window.MazeRoute 递一份快照，
+   不引用它的内部实现（maze-route.js 在本文件之前加载）。
 
    结构（自上而下就是执行顺序）：
      CFG                       所有可调参数（想改手感只动这里）
@@ -12,6 +14,7 @@
      render / update / draw    一帧 = 先算状态，再画画（两者不混）
      敌人 / QTE / 血量 / 救命   对抗系统，四个小节各自成组，互不越界
      界面切换 / 生成 / 流程     遮罩、迷宫生成、开局与结算
+     路线总结 / 结算            有序轨迹、BFS 正确路线、交给 MazeRoute 的快照
      颜色 / 输入 / 设置         交互与持久化
 
    · 迷宫：生长树（Growing Tree）生成完美迷宫；出口 = 距起点 BFS 最远的通路格，
@@ -19,7 +22,8 @@
    · 尺寸：地图边长 30~100 可调；超过 VIEW_MAX 时开摄像机窗口跟随主角，
      保证任何尺寸下每格在屏幕上都是同样大小。
    · 迷雾：视野 = 四条正交直线（遇墙即止、墙本身可见）+ 直线通路格的一层四邻
-     （路口一瞥 / 墙轮廓）。由 lit 统一提供，敌人显隐、出口、QTE、救命线全查它。
+     （路口一瞥 / 墙轮廓）。由 lit 统一提供，敌人显隐、出口、救命线全查它；
+     QTE 在 lit 之上还要求「同一条直走廊」（贴脸 1 格例外），见 cellInQteRange。
      雾层只有三档：视野内挖空露底图、外圈 FOG_FADE_RINGS 格填统一浅黑（含走过的残影）、
      其余纯黑；浅黑是不透明中性色，不透视地形，墙那一侧依旧全黑。
      通路底色故意不设为黑，视野边界才看得出来。
@@ -29,23 +33,26 @@
      宝物附近（沿路径距离，不穿墙、不压宝物），名额用完即止；③ 宝物周围没落脚点时
      剩余名额退回终点附近。终点占掉 1 个名额，所以**恰好有一个宝物没有守卫**。
      敌人外观 = 「红边白格 + 黑瞳」，平时按主人公一半速度游荡、不追人。
-     迷雾下落在视野内即「对上眼」；无迷雾时另要求
-     **同一条直走廊、中间无墙**（hasLineOfSight）→ 先定住闪 1 秒「反击！」→ 再弹 QTE（两个方向键 + 1.8 秒
+     迷雾下要「落在视野内 + 和主人公在同一条直走廊上」（贴脸 1 格例外，避免拐角侧格提前判定）；
+     无迷雾时另要求 **同一条直走廊、中间无墙**（hasLineOfSight）且在 QTE_RANGE 格内
+     → 先定住闪 1 秒「反击！」→ 再弹 QTE（两个方向键 + 1.8 秒
      倒计时）。按对 → 裂开消失；按错/超时/多按 → 变红加速到 2/3 速度追人，1.5 秒后
      若仍在视野里可以再判。被撞掉一颗心，0.8 秒无敌帧，8 秒回一颗，三颗掉光即失败。
    · 宝物：只放在「岔路尽头」（开口邻居 == 1 的通路格），数量按边长阶梯 4 / 8 / 12，
      正负面标记预分配成 3:1（正面:负面）且负面至少 1 个，收集时才随机抽具体能力。
      外观 = 主人公同色方块 + 黄色泛光边；迷雾下和敌人/出口一样只画在 lit 里，
-     唯一例外是「双生信标」：它让终点红格与所有未收集宝物一起在黑雾里常亮。
-     正面能力只在迷雾模式出现（4 个视野增益），非迷雾模式换成「已用时间 −15 秒」；
-     负面能力 3 个：随机传送 / 掉两颗心 / 身后刷一只敌人。视野增益只改雾层或显隐，
-     不往 lit 里塞格子 —— lit 仍然是「能不能被直视」的唯一真源。
+     例外是「双生信标」（全图常亮）与「隔墙之眼」（它挖开的那一片里，地形、宝物、
+     敌人、终点红格一起可见）。正面能力只在迷雾模式出现（4 个视野增益），
+     非迷雾模式换成「已用时间 −15 秒」；
+     负面能力 3 个：随机传送 / 掉两颗心 / 身后刷一只敌人。视野增益只改雾层或实体显隐，
+     不往 lit 里塞格子 —— lit 仍然是「能不能被直视」与 QTE 判定的唯一真源，
+     隔墙看见的敌人不判定。
    ============================================================ */
 (function () {
   'use strict';
 
   // 版本标记：更新后如果这里还是旧版本号，说明浏览器在用缓存
-  var VER = 'v20261107l';
+  var VER = 'v20261110h';
   try { console.log('%c迷宫寻路 ' + VER, 'color:#35e07a;font-weight:700'); } catch (e) {}
 
   // ==================== CONFIG（想改手感就动这里） ====================
@@ -109,7 +116,7 @@
 
     // ---- 终点指引 ----
     HINT_DEFAULT: true,       // 默认开启「出口在画面外时边缘箭头」
-    HINT_PAD: 1.3,            // 箭头离画面边距（格）；底部另加 HUD 高度
+    HINT_PAD: 1.3,            // 箭头离画面四边的边距（格）；HUD 在画面外，四边对称不留额外空档
 
     // ---- 生成动画 ----
     GEN_FRAMES: 70,           // 目标帧数（不管地图多大都约 1.2 秒放完）
@@ -135,6 +142,7 @@
     QTE_LOCK_MS: 1500,        // 判定失败后，同一个敌人多久才能再被判定
     QTE_GAP_MS: 700,          // 两次判定之间的最小间隔，防连环弹窗
     QTE_RANGE: 6,             // 无迷雾时，进到这个格数内才算「对上眼」
+    QTE_ADJ_REACH: 1,         // 迷雾下贴脸例外半径（格，切比雪夫）：斜对角也算；调大会让拐角又提前判定
     CRACK_MS: 560,            // 敌人裂开消失的动画时长
 
     // ---- 血量 ----
@@ -183,8 +191,10 @@
   var stage = $('stage'), cv = $('cv'), ctx = cv.getContext('2d');
   var wrap = $('wrap'), side = $('side');
   var stagewrap = $('stagewrap'), musicbar = $('musicbar'), toolbar = $('toolbar');
-  var hud = $('hud'), hudTime = $('hudTime'), hudSteps = $('hudSteps'), hudFog = $('hudFog');
+  var hud = $('hud'), hudTime = $('hudTime'), hudSteps = $('hudSteps');
   var ovStart = $('ovStart'), ovSetup = $('ovSetup'), ovGen = $('ovGen'), ovWin = $('ovWin');
+  var ovRoute = $('ovRoute');
+  var btnViewRoute = $('btnViewRoute'), btnViewRouteLose = $('btnViewRouteLose');
   var btnKb = $('btnKb'), kbLabel = $('kbLabel'), pad = $('pad');
   var btnRestart = $('btnRestart');
   var btnRescue = $('btnRescue');
@@ -204,7 +214,7 @@
 
   // 拾取宝物提示：只在舞台内浮 2 秒，不碰遮罩层，也不参与 showOnly
   // 所有遮罩集中一处：显示/收起、compact 档位都查这张表，新增遮罩只改这里
-  var OVERLAYS = [ovStart, ovSetup, ovGen, ovWin, ovLose];
+  var OVERLAYS = [ovStart, ovSetup, ovGen, ovWin, ovLose, ovRoute];
 
   // 离屏画布：整张迷宫底图 / 迷雾层（每帧只贴图，省性能）
   var bgc = document.createElement('canvas');
@@ -256,7 +266,11 @@
   // treasures 是宝物系统的唯一真源：总数 = length，已收集数从 got 派生，
   // 不再另存两个计数器（否则每次重置/换尺寸都得四处同步，迟早不同步）。
   var treasures = [];       // { x, y, i, good, got }；good 是预分配的正负面标记（玩家看不见）
-  var walked = new Uint8Array(1); // 真正踩过的格，供「照亮走过的路线」用
+  var walked = new Uint8Array(1); // 真正踩过的格（布尔表），供「照亮走过的路线」用
+  // 路线总结用：有序轨迹（含起点）与断点。跟 walked 分开存 —— walked 只回答
+  // 「这格有没有踩过」，回放需要「第几步走到哪格」。名字避开 boons.trail。
+  var walkTrail = [];       // 格索引序列，每走一步 push 一格
+  var walkBreaks = [];      // walkTrail 中与上一格不相邻的索引（负面宝物随机传送）
   var lastCell = -1;        // 上一格（「在身后生成一个敌人」用）
   // beacon = 「双生信标」：终点红格 + 所有未收集宝物一起常亮（仅迷雾模式）
   var boons = { trail: false, xray: false, beacon: false, enemies: false };
@@ -288,6 +302,8 @@
     fade = new Uint8Array(N * N);
     walked = new Uint8Array(N * N);
     litList.length = 0;
+    walkTrail.length = 0;
+    walkBreaks.length = 0;
     // 换了尺寸，上一局所有跟坐标相关的状态就全失效了
     treasures.length = 0;
     lastCell = -1;
@@ -458,8 +474,10 @@
     }
 
     // ---- 视野类正面能力：只挖雾层，不改 lit ----
-    // 这是刻意的：lit 仍是「能不能被直视」的唯一真源，敌人显隐 / QTE / 出口判定
-    // 不会因为这些增益就穿墙生效，玩家拿到的是地形与位置信息，不是透视外挂。
+    // lit 仍是「能不能被直视」的唯一真源，QTE / 救命线判定绝不穿墙。
+    // 「足迹长明」「隔墙之眼」在这里挖雾层；隔墙之眼另外放行实体显隐
+    // （宝物 / 敌人 / 终点红格，见 xrayLit + entityVisible + clipToSight），
+    // 但那只是「看得见」，不是「能判定」，也不是把格子塞进 lit。
     if (boons.trail) {
       for (i = 0; i < N * N; i++) {
         if (!walked[i] || lit[i]) continue;
@@ -586,16 +604,28 @@
     ctx.strokeRect(x + inset + ox + 0.5, y + inset + oy + 0.5, w - 1, w - 1);
   }
 
-  // 「双生信标」是不是开着：它是唯一能同时越过「必须被直视」这一关的能力。
-  // 只放宽实体显隐，不动 lit —— 视野集合本身还是那四条正交射线，绝不穿墙。
+  // 「隔墙之眼」挖开的是玩家周围 XRAY_RADIUS 格的正方形（见 rebuildFog），
+  // 只动雾层、不往 lit 里塞格子。这里是同一片区域的「实体可见」判定：
+  // 地形之外，宝物 / 敌人 / 终点红格也在这一片里现身。
+  // QTE 判定不查它 —— 隔着墙不算「对上眼」，否则就成了透视外挂。
+  function xrayLit(x, y) {
+    if (!fogOn || !boons.xray || !inBounds(x, y)) return false;
+    return Math.abs(x - px) <= CFG.XRAY_RADIUS && Math.abs(y - py) <= CFG.XRAY_RADIUS;
+  }
+
+  // 「双生信标」是不是开着：它让实体全图常亮，但同样不动 lit。
   function beaconOn() { return fogOn && boons.beacon; }
 
-  // 终点红格与宝物共用同一个判定：平时只认真视野，拿到信标后一律常亮。
-  function beaconVisible(x, y) { return beaconOn() || cellLit(x, y); }
+  // 终点红格与宝物共用同一个显隐判定：平时只认真视野；
+  // 双生信标 → 全图常亮；隔墙之眼 → 只放行它挖开的那一片。
+  // 两者都只放宽「画不画」，不改 lit，也不影响 QTE / 救命线判定。
+  function entityVisible(x, y) {
+    return beaconOn() || cellLit(x, y) || xrayLit(x, y);
+  }
 
   // 宝物：底色跟主人公一模一样，靠「边缘泛黄光」区分。
   // 画在雾层之上、实体裁剪区之内 —— 迷雾下没被直视到的宝物不会漏出来，
-  // 除非拿到了「双生信标」，那它和终点红格一起在黑雾里也亮着。
+  // 除非「双生信标」让它全图常亮，或「隔墙之眼」把它挖进了可见的那一片。
   function drawTreasures(now) {
     var k = pulse(now);
     var inset = Math.max(1, CELL * 0.1);
@@ -603,7 +633,7 @@
     var lw = Math.max(1, CELL * 0.12);
     for (var i = 0; i < treasures.length; i++) {
       var t = treasures[i];
-      if (t.got || !beaconVisible(t.x, t.y)) continue;
+      if (t.got || !entityVisible(t.x, t.y)) continue;
       var x = (t.x - camX) * CELL, y = (t.y - camY) * CELL;
       // 两次 save 是刻意的：黄光只给方块本体当光晕，描边必须在没有阴影的
       // 干净画布状态里画，否则黄边会被 shadowBlur 糊成一团。
@@ -700,10 +730,10 @@
   }
 
   // 出口红格平时只有「真的被照亮」时才画：迷雾里不许透出来指路。
-  // 「双生信标」把红格与全部未收集宝物一起拉出黑雾（都画在雾层之上）。
+  // 「双生信标」全图常亮；「隔墙之眼」只放行它挖开的那一片（与宝物共用判定）。
   function exitVisible() {
     if (exitI < 0) return false;
-    return beaconVisible(exitI % N, (exitI / N) | 0);
+    return entityVisible(exitI % N, (exitI / N) | 0);
   }
 
   // 实体（出口红格、宝物、敌人、碎片、主角）都画在雾层之上，shadowBlur 的光晕
@@ -715,13 +745,29 @@
       var ci = litList[i];
       ctx.rect((ci % N - camX) * CELL, (((ci / N) | 0) - camY) * CELL, CELL, CELL);
     }
-    // 「双生信标」/「敌影显现」把本来在雾里的实体也拉进裁剪区，
+    // 「双生信标」/「敌影显现」/「隔墙之眼」把本来在雾里的实体也拉进裁剪区，
     // 否则它们虽然通过了显隐判定，却会被 clip 切得干干净净。
     // 信标要补两类格子：终点红格 + 每一个还没被捡走的宝物。
     if (beaconOn()) {
       if (exitI >= 0) addClipCell(exitI % N, (exitI / N) | 0);
       for (i = 0; i < treasures.length; i++) {
         if (!treasures[i].got) addClipCell(treasures[i].x, treasures[i].y);
+      }
+    }
+    // 隔墙之眼按「实体所在格」补，不整片放行 —— 整片加进来的话，
+    // 救命白线也会跟着穿墙露出，那不是这个能力要给的信息。
+    if (fogOn && boons.xray) {
+      var ex = exitI % N, ey = (exitI / N) | 0;
+      if (exitI >= 0 && xrayLit(ex, ey)) addClipCell(ex, ey);
+      for (i = 0; i < treasures.length; i++) {
+        if (!treasures[i].got && xrayLit(treasures[i].x, treasures[i].y))
+          addClipCell(treasures[i].x, treasures[i].y);
+      }
+      for (i = 0; i < enemies.length; i++) {
+        var xc = enemyCells(enemies[i]);
+        for (var j = 0; j < xc.length; j++) {
+          if (xrayLit(xc[j][0], xc[j][1])) addClipCell(xc[j][0], xc[j][1]);
+        }
       }
     }
     if (fogOn && boons.enemies) {
@@ -742,6 +788,8 @@
 
   // 只画不改状态：所有绘制都在这里，顺序 = 图层顺序
   function draw(now) {
+    // 路线页是盖住整个画面的不透明遮罩，这时底下那张迷宫图不用再逐帧重画
+    if (curOverlay === ovRoute) return;
     var vw = VIEW * CELL;
     var canDraw = SIZE > 0 && vw > 0;
 
@@ -763,7 +811,7 @@
       if (exitVisible()) drawExit(now);// 红格本体：迷雾开着时要走到眼前才看得见
       drawEnemies(now);                // 敌人：被迷雾挡住的不画
       drawEffects(now);                // 裂开的碎片
-      drawTreasures(now);              // 宝物：平时只在视野里现身，信标开启后与终点一起常亮
+      drawTreasures(now);              // 宝物：平时只在视野里现身，信标全图常亮 / 隔墙之眼放行它挖开的那一片
       drawPlayer(now);
       if (clipped) ctx.restore();
 
@@ -812,9 +860,11 @@
     get ctx() { return ac; }
   };
 
-  // 调试接口：只读状态 + 两个测试用动作（tp 传送、hurt 直接扣血）。
+  // 调试接口：只读状态 + 几个测试用动作（tp 传送、hurt 扣血、take/apply 等）。
+  // tp 会像宝物传送一样在 walkTrail 里留一个断点，回放数据才不会自相矛盾。
   // 正常玩法完全不依赖这里，删掉整块游戏也照跑。
   window.MazeDebug = {
+    get ver() { return VER; },
     get state() { return state; },
     get hp() { return hp; },
     get enemies() { return enemies; },
@@ -835,7 +885,11 @@
     fade: function (x, y) { return inBounds(x, y) ? fade[y * N + x] : 0; },
     fogCfg: function () { return { half: CFG.FOG_HALF, rings: CFG.FOG_FADE_RINGS, sight: CFG.FOG_SIGHT, peek: CFG.FOG_PEEK, floor: CFG.FLOOR, wall: CFG.WALL }; },
     cellVisible: function (x, y) { return cellLit(x, y); },
+    xray: function (x, y) { return xrayLit(x, y); },
+    entityVisible: function (x, y) { return entityVisible(x, y); },
     qteRange: function (x, y) { return cellInQteRange(x, y); },
+    qteCfg: function () { return { range: CFG.QTE_RANGE, adj: CFG.QTE_ADJ_REACH }; },
+    qteEnemy: function (e) { return enemyInQteRange(e); },
     explored: function (x, y) { return inBounds(x, y) && explored[y * N + x] === 1; },
     cell: function (x, y) { return !inBounds(x, y) ? 1 : grid[y * N + x]; },
     // ---- 宝物 / 能力（回归测试用） ----
@@ -849,6 +903,11 @@
     get boons() { return { trail: boons.trail, xray: boons.xray, beacon: boons.beacon, enemies: boons.enemies }; },
     get timeBonus() { return timeBonusMs; },
     walked: function (x, y) { return inBounds(x, y) && walked[y * N + x] === 1; },
+    // ---- 路线总结（回归测试用只读快照） ----
+    route: function () { return window.MazeRoute ? window.MazeRoute.snapshot() : null; },
+    get trail() { return walkTrail.slice(); },
+    get trailBreaks() { return walkBreaks.slice(); },
+    get solution() { return traceBfsPath(1 * N + 1, exitI); },
     chestCount: function (n) { return chestCount(n || N); },
     step: function (dx, dy) { tryMove(dx, dy); },
     take: function (k) { if (treasures[k]) collectTreasure(treasures[k], performance.now()); },
@@ -859,7 +918,12 @@
       var i = by * N + bx;
       return (i >= 0 && i < N * N && bfsSeen[i] === bfsGen) ? bfsDist[i] : -1;
     },
-    tp: function (x, y) { px = x; py = y; clampCam(); rebuildFog(); },
+    tp: function (x, y) {
+      px = x; py = y; clampCam(); rebuildFog();
+      // 调试用的瞬移跟宝物传送一样是「跳跃」，轨迹里也得留个断点
+      var i = y * N + x;
+      if (walkTrail.length) { walkTrail.push(i); walkBreaks.push(walkTrail.length - 1); }
+    },
     hurt: function () { damagePlayer(performance.now()); }
   };
 
@@ -1115,7 +1179,9 @@
   function enemyLit(e) {
     // 「敌影显现」：迷雾里所有敌人都画出来（黑底上像一双双发光的眼睛）
     if (fogOn && boons.enemies) return true;
-    return cellLit(clamp(Math.round(e.x), 0, N - 1), clamp(Math.round(e.y), 0, N - 1));
+    var x = clamp(Math.round(e.x), 0, N - 1), y = clamp(Math.round(e.y), 0, N - 1);
+    // 「隔墙之眼」挖开的那一片里，墙后的敌人也现身；QTE 判定仍只认真视野
+    return cellLit(x, y) || xrayLit(x, y);
   }
 
   // 无迷雾时用的直线判定：同一行/列且中间没有墙。
@@ -1134,20 +1200,35 @@
     return true;
   }
 
-  // 迷雾下「看得见就对上眼」：lit 已保证不穿墙，不再叠加旧的方形半径 + LOS，
-  // 否则路口旁明明能看见的敌人却不会判定，贴脸挨撞很反直觉。
+  // 迷雾下「对上眼」= 看得见，而且真的在同一条直走廊上。
+  // lit 里除了四条直线，还有从直线格向四邻探头照亮的侧格（FOG_PEEK=1）；
+  // 只查 lit 的话，拐角侧格里的敌人还没拐进直走廊就会弹 QTE，
+  // 看上去像「敌人还在视野外就开始判定」。这里补回共线要求（复用无迷雾的
+  // hasLineOfSight），侧格一律不判，敌人必须走进直线那一格才触发。
+  // 唯一例外是贴脸 1 格：路口旁斜对角的敌人明明看得见，若也排除，
+  // 就会退回「贴脸挨撞却不弹 QTE」的老毛病。
+  // 视野集合 lit 本身不动：敌人显隐 / 出口 / 救命线照旧查它。
   // 无迷雾时整屏可见但一屏几十格，只认 QTE_RANGE 格内的「对上眼」。
   function cellInQteRange(ex, ey) {
-    if (fogOn) return cellLit(ex, ey);
-    var d = Math.max(Math.abs(ex - px), Math.abs(ey - py));
-    if (d > CFG.QTE_RANGE || !cellLit(ex, ey)) return false;
+    if (!cellLit(ex, ey)) return false;
+    if (!fogOn) {
+      var d = Math.max(Math.abs(ex - px), Math.abs(ey - py));
+      return d <= CFG.QTE_RANGE && hasLineOfSight(ex, ey, px, py);
+    }
+    // 贴脸例外用切比雪夫距离，斜对角也算（路口一瞥）
+    if (Math.max(Math.abs(ex - px), Math.abs(ey - py)) <= CFG.QTE_ADJ_REACH) return true;
     return hasLineOfSight(ex, ey, px, py);
   }
 
   // 敌人跨在两格之间时，它压着的任意一格「同走廊」就算对上眼。
   // 只按 round() 取一格的话，它跨过格线的那一帧会突然变成「斜对角」，
   // 贴脸却不出判定——手感上非常像 bug。
+  // 但绘制只按主格（round）判断显隐：判定若只看压着的另一格，会出现
+  // 「敌人还在黑雾里没画出来，QTE 却已经弹了」。所以先对齐显隐再谈范围。
+  // 隔墙之眼 / 信标 / 敌影也会让主格「画面上可见」，但下面的 cellInQteRange
+  // 仍要求真视野 lit + 同一条直走廊，隔墙看见的敌人不会被判定。
   function enemyInQteRange(e) {
+    if (!enemyLit(e)) return false;
     var cs = enemyCells(e);
     for (var i = 0; i < cs.length; i++) {
       if (cellInQteRange(cs[i][0], cs[i][1])) return true;
@@ -1470,17 +1551,16 @@
   // ==================== 救命指引 ====================
   // 从主人公所在格 BFS 到终点，回溯出一条格子序列，然后画成白线。
   // 迷雾模式下只在真实视野内可见（用 lit 格拼成裁剪区），不给穿墙透视。
-  function buildRescuePath() {
-    if (state !== ST.PLAYING || exitI < 0) { rescuePath = null; return; }
-    var s0 = py * N + px;
-    if (s0 === exitI) { rescuePath = null; return; }
+  function traceBfsPath(fromI, toI) {
+    // 全项目唯一的 BFS 回溯：完美迷宫里任意两格之间恰好一条路。
+    // 救命线和路线总结的「正确路线」共用这一份，别再写第二份寻路。
+    if (fromI < 0 || toI < 0 || fromI >= N * N || toI >= N * N) return null;
+    if (fromI === toI) return [fromI];
+    bfsFrom(fromI % N, (fromI / N) | 0);
+    if (bfsSeen[toI] !== bfsGen) return null;
 
-    bfsFrom(px, py);
-    if (bfsSeen[exitI] !== bfsGen) { rescuePath = null; return; }
-
-    var path = [];
-    var cur = exitI, guard = 0;   // guard：兜底，正常一定会先回到起点
-    while (cur !== s0 && guard++ < N * N) {
+    var path = [], cur = toI, guard = 0;   // guard：兜底，正常一定会先回到起点
+    while (cur !== fromI && guard++ < N * N) {
       path.push(cur);
       var cx = cur % N, cy = (cur / N) | 0, d = bfsDist[cur];
       var nxt = -1;
@@ -1491,12 +1571,19 @@
         if (grid[ni] === 1 || bfsSeen[ni] !== bfsGen) continue;
         if (bfsDist[ni] === d - 1) { nxt = ni; break; }
       }
-      if (nxt < 0) break;
+      if (nxt < 0) return null;
       cur = nxt;
     }
-    path.push(s0);
-    path.reverse();          // 改成「从主人公到终点」
-    rescuePath = path;
+    path.push(fromI);
+    path.reverse();          // 改成「从起点到终点」
+    return path;
+  }
+
+  function buildRescuePath() {
+    if (state !== ST.PLAYING || exitI < 0) { rescuePath = null; return; }
+    var s0 = py * N + px;
+    if (s0 === exitI) { rescuePath = null; return; }
+    rescuePath = traceBfsPath(s0, exitI);
   }
 
   function drawRescue(now) {
@@ -1551,6 +1638,8 @@
   // ==================== 界面切换 ====================
   // 遮罩只有这一个开关入口：传 null 表示"全部收起"
   function showOnly(el) {
+    // 离开路线页（返回结算 / 重开 / 再来一局）就停掉回放定时器，别让它在后台空转
+    if (el !== ovRoute && window.MazeRoute) window.MazeRoute.close();
     OVERLAYS.forEach(function (o) {
       o.classList.toggle('show', o === el);
     });
@@ -1593,12 +1682,10 @@
     var MB_GAP = 8;
     var mbH = (musicbar && !musicbar.hidden) ? (musicbar.offsetHeight + MB_GAP) : 0;
     var tbH = (toolbar && !toolbar.hidden) ? (toolbar.offsetHeight + MB_GAP) : 0;
-    // HUD 现在是画面下方的常驻流元素：显示时它也要吃掉一块可用高度。
-    // 它与画面之间的 gap 被 CSS 负 margin 抵消了，所以这里只扣自身高度。
-    var hudH = hud.classList.contains('show') ? hud.offsetHeight : 0;
-
+    // HUD 是悬在画面下方的绝对定位浮层，不占 flex 流的高度：
+    // 显示与否都不影响可用高度，进迷宫前后画面尺寸完全一致。
     var availW = Math.max(0, wrap.clientWidth - padX - 2);
-    var availH = Math.max(0, wrap.clientHeight - padY - 2 - mbH - tbH - hudH);
+    var availH = Math.max(0, wrap.clientHeight - padY - 2 - mbH - tbH);
 
     if (land) {
       availW -= (side.offsetWidth + gap);
@@ -1623,6 +1710,16 @@
     musicbar.classList.toggle('wide', s >= 420);
     musicbar.classList.toggle('compact', s < 320);
     musicbar.classList.toggle('tiny', s < 260);
+
+    // 舞台尺寸变了，路线页那张独立 canvas 也要按新宽度重画（仅打开时）
+    if (curOverlay === ovRoute && window.MazeRoute) window.MazeRoute.resize();
+
+    // 悬空 HUD 贴着画面底边：高度太紧的横屏里画面下方已经没有落脚点，
+    // 这时才贴回画面内底边（.inside），保证三项始终完整可见。
+    // 只切 class、不改 s，画面尺寸依旧不受 HUD 影响。
+    var hudH = hud.classList.contains('show') ? hud.offsetHeight : 0;
+    var roomBelow = window.innerHeight - stagewrap.getBoundingClientRect().bottom;
+    hud.classList.toggle('inside', hudH > 0 && roomBelow < hudH + 2);
   }
 
   // ==================== 迷宫生成 ====================
@@ -1855,7 +1952,7 @@
   // 负面能力三种模式通用。
   var GOOD_FOG = [
     { key: 'trail',   name: '足迹长明', desc: '走过的路线永久照亮' },
-    { key: 'xray',    name: '隔墙之眼', desc: '能看见墙后的地形' },
+    { key: 'xray',    name: '隔墙之眼', desc: '能看见墙后的地形与实体' },
     { key: 'beacon',  name: '双生信标', desc: '终点红格与所有宝物永远可见' },
     { key: 'enemies', name: '敌影显现', desc: '所有敌人永远可见' }
   ];
@@ -1966,6 +2063,9 @@
     var dest = cand[(Math.random() * cand.length) | 0];
     px = dest % N; py = (dest / N) | 0;
     walked[dest] = 1;
+    // 传送是「跳」过去的：轨迹里记一格，并标记这一格与上一格不相邻
+    walkTrail.push(dest);
+    walkBreaks.push(walkTrail.length - 1);
     lastCell = -1;                 // 上一格已经没意义了，别让「背后刷怪」放到老位置
     invulnUntil = Math.max(invulnUntil, now + CFG.TP_GRACE_MS);
     clampCam();
@@ -2021,14 +2121,17 @@
     placeTreasures();    // 岔路尽头放宝物（要用到 exitI，所以在 findExit 之后）
     spawnEnemies();      // 数量 = 宝物数：终点 1 只 + 其余一个宝物 1 只；宝物必须先放好
     walked[1 * N + 1] = 1;
+    // 路线总结的有序轨迹从起点开始；每局重新生成时 applyMapSize 已清过一次
+    walkTrail.length = 0;
+    walkBreaks.length = 0;
+    walkTrail.push(1 * N + 1);
     clampCam();
     resetFog();   // 迷雾立即生效：进来只剩身周一小块视野，整图不给看
 
     // 先解除遮罩再动别的 UI：万一后面任何一步出异常，也不会把画面锁在黑屏上
     showOnly(null);
     hud.classList.add('show');
-    fit();          // HUD 从隐藏变可见，下方多出一条状态栏 → 重算画面尺寸
-    hudFog.hidden = !fogOn;
+    fit();          // HUD 是浮层、不占高度；重算一次，画面尺寸与开始界面保持一致
     hudSteps.textContent = '0 步';
     hudTime.textContent = '00:00.00';
     syncHearts();
@@ -2051,6 +2154,7 @@
     hudSteps.textContent = steps + ' 步';
     var here = py * N + px;
     walked[here] = 1;
+    walkTrail.push(here);      // 路线回放：一次移动 = 轨迹里一格
     clampCam();
     rebuildFog();
     beep(520 + Math.random() * 40, 0.03, 'square', 0.022);
@@ -2077,6 +2181,29 @@
     });
   }
 
+  // ==================== 路线总结（交给独立模块 maze-route.js） ====================
+  // 主游戏只负责递一份本局快照，绘制 / 回放 / 统计全在新模块里。
+  // 以后换展示方案、加导出或分享，都不用再动这个文件。
+  function routeSnapshot(returnTo) {
+    return {
+      N: N, SIZE: SIZE, grid: grid, bgc: bgc,   // 传引用：100×100 的地图也才 10KB
+      ver: VER,                                 // 版本只有 maze.js 一处真源
+      trail: walkTrail.slice(), breaks: walkBreaks.slice(),
+      solution: traceBfsPath(1 * N + 1, exitI),  // 取不到时由模块归一化成 []
+      startI: 1 * N + 1, exitI: exitI,
+      treasures: treasures.map(function (t) { return { i: t.i, got: t.got }; }),
+      steps: steps, won: state === ST.WIN, mapSize: mapSize,
+      returnTo: returnTo,
+      onClose: function (el) { showOnly(el); }
+    };
+  }
+
+  function openRoute(returnTo) {
+    if (!window.MazeRoute || exitI < 0) return;
+    showOnly(ovRoute);        // 先让遮罩可见，路线模块的 canvas 才量得到宽度
+    window.MazeRoute.open(routeSnapshot(returnTo));
+  }
+
   // 把游戏状态彻底复位回「开始」界面。
   // 注意：这里不复位音乐模块 —— 它独立运行，重开一局不该打断正在放的音乐。
   function resetToStart() {
@@ -2088,6 +2215,8 @@
     exitI = -1;
     px = 1; py = 1;
     steps = 0;
+    walkTrail.length = 0;
+    walkBreaks.length = 0;
     camX = 0; camY = 0;
     startTime = 0;
     renderErrorLogged = false;   // 复位渲染异常标记，重新给一次日志机会
@@ -2243,12 +2372,23 @@
     beginGenerate();
   });
 
+  // 两个结算页各自的「查看路线」：同一个回放模块，返回时切回各自的结算页
+  btnViewRoute.addEventListener('click', function () {
+    ensureAudio();
+    openRoute(ovWin);
+  });
+  btnViewRouteLose.addEventListener('click', function () {
+    ensureAudio();
+    openRoute(ovLose);
+  });
+
   btnKb.addEventListener('click', function () {
     ensureAudio();
     var on = pad.classList.toggle('show');
     kbLabel.textContent = on ? '收起虚拟键盘' : '呼出虚拟键盘';
     btnKb.classList.toggle('active', on);
-    fit();
+    // 不调用 fit()：虚拟键盘是 .side 上的绝对定位浮层，不占 flex 流，
+    // 侧栏尺寸前后一致，画面尺寸自然也不变（旧实现在这里重算会把画面缩小）。
   });
 
   // ==================== 地图大小 / 迷雾 / 音量 ====================

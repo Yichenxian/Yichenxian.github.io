@@ -12,7 +12,7 @@
       · 每格浓度逐帧趋近目标，亮↔黑走渐变而不是硬切。
    ============================================================ */
 
-import { N, idx, xOf, yOf, inBounds, clamp } from './escape-map.js?v=20261114e';
+import { N, idx, xOf, yOf, inBounds, clamp } from './escape-map.js?v=20261114f';
 
 export const FOG_SIGHT = 4;      // 玩家四个正交方向各看 4 格
 // 视线从十字射线沿通路格扩散到整个半径 4：视野形状接近固定的圆形光圈，
@@ -31,7 +31,7 @@ export const MAP_PAD = (VIEW >> 1) + 2;
 export const MONSTER_SIGHT = 5;
 
 export const VISION_R = FOG_SIGHT;   // 固定光圈半径（格），与玩家坐标无关
-export const FOG_FADE_MS = 140;      // 黑幕浓度淡入淡出时长（消除明暗硬切）
+export const FOG_FADE_MS = 100;      // 黑幕浓度淡入淡出时长（消除明暗硬切；100 比 140 收敛更快，避开 160ms/格移动节奏的共振）
 export const FOG_SOLID = 1;          // 墙后 / 视野外：不透明黑
 
 const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
@@ -155,21 +155,19 @@ export function fogTargets(mask, sight, camX, camY) {
   return out;
 }
 
-/** 逐帧把当前浓度推向目标：亮↔黑走 140ms 渐变，移动时不再整片硬切 */
+/** 逐帧把当前浓度推向目标：指数平滑，单调收敛、不过冲、帧率无关，边缘翻转时不来回抖 */
 export function approachFog(cur, target, dtMs) {
-  const step = Math.min(1, Math.max(0, dtMs) / FOG_FADE_MS);
-  if (step <= 0) return cur;
-  for (let k = 0; k < cur.length; k++) {
-    const d = target[k] - cur[k];
-    if (d > 0) cur[k] = Math.min(target[k], cur[k] + step);
-    else if (d < 0) cur[k] = Math.max(target[k], cur[k] - step);
+  if (!(dtMs > 0)) return cur;
+  const k = 1 - Math.exp(-3 * dtMs / FOG_FADE_MS);
+  for (let i = 0; i < cur.length; i++) {
+    cur[i] += (target[i] - cur[i]) * k;
   }
   return cur;
 }
 
 /**
  * 在专用雾层 canvas 上画雾。alpha 是 approachFog 平滑后的每格黑幕浓度（0..1）。
- * 逐格略重叠 0.6px，避免相邻黑格之间露出亮缝。
+ * 像素对齐取整、相邻格无缝不重叠，避免浮点 cell 造成的接缝暗线。
  */
 export function drawFog(fogCtx, alpha, cell) {
   const s = VIEW * cell;
@@ -178,8 +176,12 @@ export function drawFog(fogCtx, alpha, cell) {
     for (let vx = 0; vx < VIEW; vx++) {
       const a = alpha[vy * VIEW + vx];
       if (a <= 0.001) continue;
+      const x0 = Math.round(vx * cell);
+      const y0 = Math.round(vy * cell);
+      const x1 = Math.round((vx + 1) * cell);
+      const y1 = Math.round((vy + 1) * cell);
       fogCtx.fillStyle = a >= 0.999 ? '#000000' : 'rgba(0,0,0,' + a.toFixed(3) + ')';
-      fogCtx.fillRect(vx * cell, vy * cell, cell + 0.6, cell + 0.6);
+      fogCtx.fillRect(x0, y0, x1 - x0, y1 - y0);
     }
   }
 }

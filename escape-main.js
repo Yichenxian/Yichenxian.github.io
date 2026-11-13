@@ -5,17 +5,17 @@
 
 import {
   N, idx, inBounds, CFG, unpackGrid, hashGrid
-} from './escape-map.js?v=20261114e';
-import { computeSight, centerCam, FOG_SIGHT, FOG_PEEK } from './escape-fog.js?v=20261114e';
-import { tickMonster, publicMonster } from './escape-ai.js?v=20261114e';
-import { tickBots } from './escape-bot.js?v=20261114e';
-import { createRenderer } from './escape-render.js?v=20261114e';
-import { createUI } from './escape-ui.js?v=20261114e';
-import { createSfx } from './escape-sfx.js?v=20261114e';
+} from './escape-map.js?v=20261114f';
+import { computeSight, centerCam, FOG_SIGHT, FOG_PEEK } from './escape-fog.js?v=20261114f';
+import { tickMonster, publicMonster } from './escape-ai.js?v=20261114f';
+import { tickBots } from './escape-bot.js?v=20261114f';
+import { createRenderer } from './escape-render.js?v=20261114f';
+import { createUI } from './escape-ui.js?v=20261114f';
+import { createSfx } from './escape-sfx.js?v=20261114f';
 import {
   createNet, createSoloNet, parseQuery, normalizeRoomId, GAME0
-} from './escape-net.js?v=20261114e';
-import { createAuthority, INVULN_MS } from './escape-authority.js?v=20261114e';
+} from './escape-net.js?v=20261114f';
+import { createAuthority, INVULN_MS } from './escape-authority.js?v=20261114f';
 
 const STEP_MS = 160;      // 每格间隔（约 6 格/秒）
 const PUSH_MS = 50;

@@ -10,8 +10,8 @@
       玩家却要松手、看路、重按，「狭窄迷宫甩不掉」就是这么来的。
    ============================================================ */
 
-import { N, idx, xOf, yOf, bfsDistances, bfsStep, CFG } from './escape-map.js?v=20261114e';
-import { computeSight, MONSTER_SIGHT } from './escape-fog.js?v=20261114e';
+import { N, idx, xOf, yOf, bfsDistances, bfsStep, CFG } from './escape-map.js?v=20261114f';
+import { computeSight, MONSTER_SIGHT } from './escape-fog.js?v=20261114f';
 
 export const AI = {
   ROAM_MS: 470,          // 游荡：约 2.1 格/秒

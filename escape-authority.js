@@ -7,9 +7,9 @@
 
 import {
   idx, CFG, makeRng, shuffle, generateMap, publicMapInfo
-} from './escape-map.js?v=20261114e';
-import { createMonster } from './escape-ai.js?v=20261114e';
-import { createBot } from './escape-bot.js?v=20261114e';
+} from './escape-map.js?v=20261114f';
+import { createMonster } from './escape-ai.js?v=20261114f';
+import { createBot } from './escape-bot.js?v=20261114f';
 
 /** 受伤后的无敌时间；主控的 tryRevive 也要用，所以从这里导出 */
 export const INVULN_MS = 900;

@@ -964,10 +964,6 @@ input[type="color"]::-moz-color-swatch {
 
 .field-label { white-space: nowrap; }
 
-/* 当前设置下不会生效的开关（如小地图时的终点指引）：整行淡出，但仍可点 */
-.field.dim { opacity: .42; transition: opacity .18s ease; }
-.field.dim:hover { opacity: .7; }
-
 .field-val {
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
   font-size: 12px;

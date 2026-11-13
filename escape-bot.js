@@ -6,7 +6,7 @@
    人机只认真钥匙：假钥匙留给人类用能力判断，人机不作弊也不白掉血。
    ============================================================ */
 
-import { idx, xOf, yOf, bfsDistances, bfsStep } from './escape-map.js?v=20261114e';
+import { idx, xOf, yOf, bfsDistances, bfsStep } from './escape-map.js?v=20261114f';
 
 export const BOT = {
   STEP_MS: 270,       // 常规移动间隔（玩家按住键是 160ms，人机略慢）

@@ -53,7 +53,7 @@
   'use strict';
 
   // 版本标记：更新后如果这里还是旧版本号，说明浏览器在用缓存
-  var VER = 'v20261113r';
+  var VER = 'v20261114f';
   try { console.log('%c迷宫寻路 ' + VER, 'color:#35e07a;font-weight:700'); } catch (e) {}
 
   // ==================== CONFIG（想改手感就动这里） ====================

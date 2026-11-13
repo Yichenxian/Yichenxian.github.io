@@ -7,11 +7,11 @@
    格子亮起来时自然浮现，不必给每个实体单独算透明度。
    ============================================================ */
 
-import { N, idx, xOf, yOf } from './escape-map.js?v=20261114e';
+import { N, idx, xOf, yOf } from './escape-map.js?v=20261114f';
 import {
   VIEW, MAP_PAD, drawFog, projectEdge,
   buildVisionMask, fogTargets, approachFog, FOG_FADE_MS
-} from './escape-fog.js?v=20261114e';
+} from './escape-fog.js?v=20261114f';
 
 export const COLORS = {
   WALL: '#8f1d2c',

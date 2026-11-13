@@ -832,7 +832,8 @@ const PAD_GAP = 8; // 与 .pad 的 gap 一致
 const HUD_RESERVE_MIN = 38; // 一行 HUD(32) + 与侧栏的 6px 间隙
 const EDGE_PAD = 2;        // 与迷宫一致的 1px 余量（左右各 1）
 
-/** 虚拟键盘自适应：保持十字形状，按剩余高度缩放键帽，极矮屏按需上推内容 */
+/** 虚拟键盘自适应：保持十字形状，键帽尽量大 —— 空间不够时**先上推画面**
+    （用掉竖屏居中的上方留白；用户反馈居中会让下方键盘变小），再按最终可用高度缩键帽。 */
 function sizePad() {
   const pad = ui.els.pad;
   const app = ui.els.app;
@@ -844,13 +845,25 @@ function sizePad() {
   // 覆盖 .foot 占位区（侧栏底 -18px），但不得高于按钮行底 +4，避免挡住「呼出虚拟按钮」
   const padTop = Math.max(sideRect.bottom - 18, rowBottom + 4);
   pad.style.top = (padTop - sideRect.top) + 'px';
-  const padRoom = window.innerHeight - padTop - 2;
   const baseKey = Math.floor(Math.max(52, Math.min(64, window.innerWidth * 0.14)));
+  // 键盘按 baseKey 需要的高度；放不下就先把内容往上推（最多推到 .wrap 顶部），
+  // 把居中留白让给键盘 —— 这样 360/375 小屏的键帽不再被压到 30px。
+  const need = baseKey * 2 + PAD_GAP;
+  const overflow = padTop + need - (window.innerHeight - 2);
+  if (overflow > 0) {
+    const wrapRect = ui.els.wrap.getBoundingClientRect();
+    const appRect = app.getBoundingClientRect();
+    const upRoom = Math.max(0, appRect.top - wrapRect.top - 4);
+    const push = Math.min(overflow, upRoom);
+    if (push > 0) app.style.paddingBottom = Math.ceil(push * 2 + 8) + 'px';
+  }
+  // 上推后重读位置，按最终可用高度定键帽（上推后可用高度变大，键帽能更大）
+  const sideRect2 = ui.els.side.getBoundingClientRect();
+  const padTop2 = Math.max(sideRect2.bottom - 18, ui.els.actionRow.getBoundingClientRect().bottom + 4);
+  pad.style.top = (padTop2 - sideRect2.top) + 'px';
+  const padRoom = window.innerHeight - padTop2 - 2;
   const key = Math.max(30, Math.min(baseKey, Math.floor((padRoom - PAD_GAP) / 2)));
   pad.style.setProperty('--key', key + 'px');
-  // 键帽到下限仍放不下时，把内容整体上推（.wrap 可滚动兜底）
-  const overflow = padTop + 2 * key + PAD_GAP - (window.innerHeight - 2);
-  if (overflow > 0) app.style.paddingBottom = Math.ceil(overflow * 2 + 8) + 'px';
 }
 
 /** .wrap 的内边距。clientWidth/Height 含 padding，必须自己扣掉 ——

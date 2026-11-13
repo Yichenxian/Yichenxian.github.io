@@ -24,7 +24,6 @@ export const CFG = {
   EXIT_KEY_MAX: 35,        // 终点到最远真钥匙的最大路径距离（51×70%）
   MONSTER_HOME_R: 6,       // 怪物游荡环带半径
   MONSTER_MIN_SPAWN: 16,   // 怪物离出生点最小路径距离
-  ALLY_UNLOCK: 4,          // 累计真钥匙解锁队友透视
   HP_MAX: 3,
   MAX_RETRY: 30
 };

@@ -1,18 +1,25 @@
 /* ============================================================
    合作逃生 · 怪物 AI（房主单端执行）
    WANDER 终点周围缓慢游荡 → 看到玩家 CHASE 加速追击 → 脱战 RETURN 回巢
-   视野规则与玩家相同但范围 8 格（玩家 2 倍），不可穿墙
+   怪物刻意用窄十字视野（computeSight 的 peek 固定传 1）看 5 格，
+   比玩家的固定光圈「瞎」一些 —— 玩家拐个弯才能断线，不可穿墙
+
+   甩脱手感的三条硬约束（改数值前先看 escape_chase_test.js）：
+   ① 追击明显慢于玩家；② 视野只比玩家多一点，拐两个弯就能断线；
+   ③ 追击态拐弯要付转身成本，否则单格走廊里怪物 BFS 抄近路零成本，
+      玩家却要松手、看路、重按，「狭窄迷宫甩不掉」就是这么来的。
    ============================================================ */
 
-import { N, idx, xOf, yOf, bfsDistances, bfsStep, CFG } from './escape-map.js?v=20261113r';
-import { computeSight, MONSTER_SIGHT } from './escape-fog.js?v=20261113r';
+import { N, idx, xOf, yOf, bfsDistances, bfsStep, CFG } from './escape-map.js?v=20261114e';
+import { computeSight, MONSTER_SIGHT } from './escape-fog.js?v=20261114e';
 
 export const AI = {
   ROAM_MS: 470,          // 游荡：约 2.1 格/秒
-  CHASE_MS: 240,         // 追击：约 4.2 格/秒 = 玩家(160) 的 67%，跑直线能拉开
+  CHASE_MS: 320,         // 追击：约 3.1 格/秒 = 玩家(160) 的 50%，直线能明显拉开
   RETURN_MS: 360,        // 回巢：约 2.8 格/秒
-  DEAGGRO_MS: 1200,      // 丢视野后最多再追 1.2 秒，之后强制回巢
-  STUN_MS: 600,          // 撞到人后自身僵直：给受害者一个逃跑窗口
+  TURN_MS: 180,          // 追击态每次改变方向额外停顿（只罚追击，游荡不卡顿）
+  DEAGGRO_MS: 800,       // 丢视野后最多再追 0.8 秒，之后强制回巢
+  STUN_MS: 900,          // 撞人后自身僵直：完整覆盖玩家 900ms 无敌窗口
   HIT_REACH: 1,          // 撞击判定：同格或相邻一格（曼哈顿距离）
   HOME_R: CFG.MONSTER_HOME_R
 };
@@ -31,6 +38,7 @@ export function createMonster(homeI, rng) {
     dist: null,
     homeDist: null,
     nextMoveAt: 0,
+    lastDir: 0,           // 上一格的方向（step-curI），用来判「这一步是不是拐弯」
     rng
   };
 }
@@ -63,7 +71,7 @@ function visiblePlayers(grid, m, players) {
 export function tickMonster(m, grid, players, now) {
   const events = [];
 
-  // 僵直：撞完人先缓 600ms，既不动也不再判定，被追的人才有机会拉开
+  // 僵直：撞完人先缓一拍，既不动也不再判定，被追的人才有机会拉开
   if (now < m.stunUntil) { m.stu = true; return events; }
   m.stu = false;
 
@@ -130,9 +138,19 @@ export function tickMonster(m, grid, players, now) {
     }
 
     const step = m.dist ? bfsStep(grid, m.dist, curI) : -1;
-    if (step >= 0) { m.x = xOf(step); m.y = yOf(step); }
-    else if (m.st === 'chase') { m.st = 'return'; m.dist = null; m.target = null; m.lastSeenI = -1; }
-    m.nextMoveAt = now + interval;
+    if (step >= 0) {
+      const dir = step - curI;                    // ±1 是左右，±N 是上下
+      const turned = m.lastDir !== 0 && dir !== m.lastDir;
+      m.lastDir = dir;
+      m.x = xOf(step); m.y = yOf(step);
+      // 只罚追击态：玩家在单格走廊里换方向要松手 + 看路 + 重按（约 250ms），
+      // 怪物若零成本转向就能靠 BFS 抄近路堵人。给它 180ms 转身成本，
+      // 玩家直线跑的那一侧才真正占得到便宜。
+      m.nextMoveAt = now + interval + (m.st === 'chase' && turned ? AI.TURN_MS : 0);
+    } else {
+      if (m.st === 'chase') { m.st = 'return'; m.dist = null; m.target = null; m.lastSeenI = -1; }
+      m.nextMoveAt = now + interval;
+    }
   }
 
   // 撞击判定：同格或相邻一格（迷宫里边相邻的通道格必然连通），且不在无敌帧内。

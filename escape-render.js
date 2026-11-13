@@ -1,10 +1,17 @@
 /* ============================================================
    合作逃生 · Canvas 绘制
-   底图（离屏整图）→ 雾层（离屏）→ 实体（只查 lit）→ 能力叠加层 / 箭头
+   底图（离屏整图）→ 实体（只查 lit）→ 雾层（固定光圈 + 墙后不透明黑）
+   → 能力叠加层 / 箭头（穿雾标记，画在雾之上）
+
+   雾层压在实体**之上**是关键：墙后的钥匙 / 怪物 / 玩家会被黑幕一起盖住，
+   格子亮起来时自然浮现，不必给每个实体单独算透明度。
    ============================================================ */
 
-import { N, idx, xOf, yOf } from './escape-map.js?v=20261113r';
-import { VIEW, MAP_PAD, drawFog, projectEdge } from './escape-fog.js?v=20261113r';
+import { N, idx, xOf, yOf } from './escape-map.js?v=20261114e';
+import {
+  VIEW, MAP_PAD, drawFog, projectEdge,
+  buildVisionMask, fogTargets, approachFog, FOG_FADE_MS
+} from './escape-fog.js?v=20261114e';
 
 export const COLORS = {
   WALL: '#8f1d2c',
@@ -29,6 +36,11 @@ export function createRenderer(canvas) {
   const fogCanvas = document.createElement('canvas');
   const fogCtx = fogCanvas.getContext('2d');
   let cell = 24, s = 360, mapKey = '';
+  // 固定光圈（屏幕空间，一次算好）＋ 逐格黑幕浓度（逐帧平滑）。
+  // 两者纯渲染，绝不碰 sight.lit —— 实体显隐 / 怪物感知 / 心跳仍认唯一真源。
+  const visionMask = buildVisionMask();
+  const fogAlpha = new Float32Array(VIEW * VIEW).fill(1);
+  let fogAt = 0, fogMapKey = '';
 
   function resize(size) {
     s = Math.max(120, Math.round(size));
@@ -38,6 +50,7 @@ export function createRenderer(canvas) {
     const ms = Math.ceil((N + MAP_PAD * 2) * cell);
     mapCanvas.width = ms; mapCanvas.height = ms;
     mapKey = '';
+    fogAlpha.fill(1); fogAt = 0; fogMapKey = '';
   }
 
   function paintMap(grid) {
@@ -133,33 +146,29 @@ export function createRenderer(canvas) {
     st = data;
     if (!data.grid || !data.sight) return;
     if (mapKey !== data.mapHash) { paintMap(data.grid); mapKey = data.mapHash; }
+    // 换地图（新的一局）把黑幕拉回全黑，别把上一局的雾带进来
+    if (fogMapKey !== data.mapHash) {
+      fogAlpha.fill(1); fogAt = 0; fogMapKey = data.mapHash;
+    }
+    // 首帧一步到位；之后每帧朝目标靠近，亮↔黑走 FOG_FADE_MS 渐变，不再硬切
+    const fogTarget = fogTargets(visionMask, data.sight, data.camX, data.camY);
+    const dt = fogAt ? Math.min(FOG_FADE_MS, Math.max(0, data.now - fogAt)) : FOG_FADE_MS;
+    fogAt = data.now;
+    approachFog(fogAlpha, fogTarget, dt);
 
     ctx.clearRect(0, 0, s, s);
     ctx.drawImage(mapCanvas, (data.camX + MAP_PAD) * cell, (data.camY + MAP_PAD) * cell,
       VIEW * cell, VIEW * cell, 0, 0, s, s);
 
-    drawFog(fogCtx, data.sight, data.camX, data.camY, cell, {
-      revealAll: !!data.revealAll,
-      px: data.px, py: data.py
-    });
-    ctx.drawImage(fogCanvas, 0, 0);
-
     const pulse = 0.5 + 0.5 * Math.sin(data.now / 260);
     const lit = data.sight.lit;
     const inView = (wx, wy) => wx >= data.camX && wx < data.camX + VIEW && wy >= data.camY && wy < data.camY + VIEW;
 
-    // ---- 终点（只在照亮时可见） ----
+    // ---- 终点（照亮时可见；能力③的玩家会在雾层之上额外高亮） ----
     const ex = xOf(data.exitI), ey = yOf(data.exitI);
     if (lit[data.exitI] && inView(ex, ey)) {
-      ctx.fillStyle = data.exitActive ? COLORS.EXIT_ON : COLORS.EXIT_OFF;
+      ctx.fillStyle = COLORS.EXIT_OFF;
       ctx.fillRect(sx(ex) + cell * 0.08, sy(ey) + cell * 0.08, cell * 0.84, cell * 0.84);
-      if (data.exitActive) {
-        ctx.strokeStyle = COLORS.EXIT_GOLD;
-        ctx.lineWidth = Math.max(2, cell * 0.1);
-        ctx.globalAlpha = 0.55 + 0.45 * pulse;
-        ctx.strokeRect(sx(ex) + cell * 0.1, sy(ey) + cell * 0.1, cell * 0.8, cell * 0.8);
-        ctx.globalAlpha = 1;
-      }
     }
 
     // ---- 钥匙（只在照亮时画实体；透视能力单独画标记层） ----
@@ -206,7 +215,7 @@ export function createRenderer(canvas) {
       const p = data.players[k];
       const pi = idx(p.x, p.y);
       const isSelf = p.id === data.viewId;
-      const teammateReveal = data.allyUnlocked && !isSelf;
+      const teammateReveal = data.allyVision && !isSelf;
       if (!lit[pi] && !teammateReveal) continue;
       if (!inView(p.x, p.y)) continue;
       const px = sx(p.x), py = sy(p.y);
@@ -238,6 +247,12 @@ export function createRenderer(canvas) {
       ctx.globalAlpha = 1;
     }
 
+    // ---- 雾层：压在实体之上、能力标记之下 ----
+    // 实体因此自动被「墙后不透明黑」盖住，格子亮起来时才自然浮现；
+    // 能力①光点 / 队友透视 / 方向箭头是穿雾标记，必须留在雾层之上。
+    drawFog(fogCtx, fogAlpha, cell);
+    ctx.drawImage(fogCanvas, 0, 0);
+
     // ---- 能力①：钥匙位置透视（雾上标记 + 画面外箭头） ----
     if (data.keyBeacons) {
       for (let k = 0; k < data.keys.length; k++) {
@@ -256,8 +271,8 @@ export function createRenderer(canvas) {
       }
     }
 
-    // ---- 队友位置显示：全队解锁后透视迷雾，画面外用同色箭头 ----
-    if (data.allyUnlocked) {
+    // ---- 能力④：队友位置透视迷雾，画面外用同色箭头 ----
+    if (data.allyVision) {
       for (let k = 0; k < data.players.length; k++) {
         const p = data.players[k];
         if (p.id === data.viewId || !p.alive) continue;
@@ -273,10 +288,20 @@ export function createRenderer(canvas) {
       }
     }
 
-    // ---- 终点激活后给方向箭头 ----
-    if (data.exitActive && !inView(ex, ey)) {
-      const e = projectEdge(ex, ey, data.camX, data.camY);
-      if (e) arrow(e.gx, e.gy, e.angle, COLORS.EXIT_GOLD, 0.5);
+    // ---- 能力③：终点透视（穿雾高亮 + 画面外箭头） ----
+    if (data.exitVision) {
+      if (inView(ex, ey)) {
+        ctx.fillStyle = COLORS.EXIT_ON;
+        ctx.fillRect(sx(ex) + cell * 0.08, sy(ey) + cell * 0.08, cell * 0.84, cell * 0.84);
+        ctx.strokeStyle = COLORS.EXIT_GOLD;
+        ctx.lineWidth = Math.max(2, cell * 0.1);
+        ctx.globalAlpha = 0.55 + 0.45 * pulse;
+        ctx.strokeRect(sx(ex) + cell * 0.1, sy(ey) + cell * 0.1, cell * 0.8, cell * 0.8);
+        ctx.globalAlpha = 1;
+      } else {
+        const e = projectEdge(ex, ey, data.camX, data.camY);
+        if (e) arrow(e.gx, e.gy, e.angle, COLORS.EXIT_GOLD, 0.5);
+      }
     }
   }
 

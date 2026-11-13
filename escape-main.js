@@ -5,17 +5,17 @@
 
 import {
   N, idx, inBounds, CFG, unpackGrid, hashGrid
-} from './escape-map.js?v=20261113r';
-import { computeSight, centerCam, FOG_SIGHT, FOG_PEEK } from './escape-fog.js?v=20261113r';
-import { tickMonster, publicMonster } from './escape-ai.js?v=20261113r';
-import { tickBots } from './escape-bot.js?v=20261113r';
-import { createRenderer } from './escape-render.js?v=20261113r';
-import { createUI } from './escape-ui.js?v=20261113r';
-import { createSfx } from './escape-sfx.js?v=20261113r';
+} from './escape-map.js?v=20261114e';
+import { computeSight, centerCam, FOG_SIGHT, FOG_PEEK } from './escape-fog.js?v=20261114e';
+import { tickMonster, publicMonster } from './escape-ai.js?v=20261114e';
+import { tickBots } from './escape-bot.js?v=20261114e';
+import { createRenderer } from './escape-render.js?v=20261114e';
+import { createUI } from './escape-ui.js?v=20261114e';
+import { createSfx } from './escape-sfx.js?v=20261114e';
 import {
   createNet, createSoloNet, parseQuery, normalizeRoomId, GAME0
-} from './escape-net.js?v=20261113r';
-import { createAuthority, INVULN_MS } from './escape-authority.js?v=20261113r';
+} from './escape-net.js?v=20261114e';
+import { createAuthority, INVULN_MS } from './escape-authority.js?v=20261114e';
 
 const STEP_MS = 160;      // 每格间隔（约 6 格/秒）
 const PUSH_MS = 50;
@@ -176,7 +176,6 @@ function publicGame() {
     monsterHomeI: A.info ? A.info.monsterHomeI : -1,
     spawns: A.info ? A.info.spawns.map(s => ({ x: s.x, y: s.y })) : [],
     abilities: Object.assign({}, A.abilities),
-    allyUnlocked: A.allyUnlocked,
     players: clonePlayers(A.players),
     bots: botRoster.map(b => ({ id: b.id, name: b.name, color: b.color })),
     monster: A.monster ? publicMonster(A.monster) : { x: 0, y: 0, st: 'wander', target: null },
@@ -471,7 +470,7 @@ function tryMove(u, d) {
   if (!dir) return;
   let nx = p.x + dir[0], ny = p.y + dir[1];
 
-  if (d.wall && A.abilities[u] === 4 && p.wallCharges > 0) {
+  if (d.wall && p.wallCharges > 0) {
     const land = wallLanding(p.x, p.y, dir[0], dir[1]);
     if (land) {
       nx = land.x; ny = land.y;
@@ -496,15 +495,10 @@ function collectKey(u, cellI) {
     A.realTaken++;
     p.keysReal++;
     if (p.hp < CFG.HP_MAX) p.hp++;
-    if (A.abilities[u] === 4) p.wallCharges++;
-    if (!A.allyUnlocked && A.realTaken >= CFG.ALLY_UNLOCK) {
-      A.allyUnlocked = true;
-      emitEvent({ type: 'ALLY_UNLOCK' });
-    }
+    p.wallCharges++;
     if (!A.exitActive && A.realTaken >= A.info.realTotal) {
       A.exitActive = true;
       A.keysDoneAt = Date.now();
-      emitEvent({ type: 'EXIT_ACTIVE' });
     }
     emitEvent({ type: 'KEY_PICK', userId: u, real: true, keyIndex: k });
   } else {
@@ -559,8 +553,6 @@ function handleEvent(evt) {
     case 'DEATH': ui.toast(who + ' 倒下了' + (evt.reviveUsed ? '（只能观战）' : '，可抢救')); sfx.play('death'); break;
     case 'REVIVE': ui.toast('抢救成功，' + who + ' 复活'); sfx.play('revive'); break;
     case 'WALL_USE': ui.toast('穿透墙壁，剩余 ' + evt.chargesAfter + ' 次'); sfx.play('wall'); break;
-    case 'ALLY_UNLOCK': ui.toast('队友位置已解锁'); sfx.play('unlock'); break;
-    case 'EXIT_ACTIVE': ui.toast('钥匙集齐！全员前往终点'); sfx.play('exit'); break;
     case 'WIN': sfx.play('win'); break;
     case 'LOSE': sfx.play('lose'); break;
     default: break;
@@ -614,7 +606,7 @@ function renderButtons() {
     });
   }
   ui.renderButtons({
-    showWall: inGame && alive && myAbility() === 4,
+    showWall: inGame && alive,
     wallCharges: me ? me.wallCharges : 0,
     showRevive: !!reviveTarget,
     reviveName: reviveTarget ? shortName(reviveTarget) : '',
@@ -654,11 +646,10 @@ function renderFrame(now) {
     fakeIds: revealedFakeIds,
     distinguish: myAbility() === 2,
     keyBeacons: myAbility() === 1,
-    revealAll: myAbility() === 3,
+    exitVision: myAbility() === 3 && viewGame.exitActive,
     exitI: viewGame.exitI,
-    exitActive: viewGame.exitActive,
     monster: viewGame.monster,
-    allyUnlocked: viewGame.allyUnlocked,
+    allyVision: myAbility() === 4,
     now
   });
   lastViewPos = { x: vp.x, y: vp.y };
@@ -1212,7 +1203,7 @@ ui.bind({
   },
   onWall: () => {
     const me = viewGame.players[selfId];
-    if (phase !== 'playing' || myAbility() !== 4 || !me || !me.alive || me.wallCharges <= 0) return;
+    if (phase !== 'playing' || !me || !me.alive || me.wallCharges <= 0) return;
     pendingWall = true;
     ui.toast('下一次移动将穿透一格墙');
   },

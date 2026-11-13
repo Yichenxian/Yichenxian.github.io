@@ -12,7 +12,7 @@ export const GAME0 = {
   size: 51, mapB64: '', mapHash: '',
   keys: [], realTotal: 0, fakeTotal: 0, realTaken: 0, fakePicked: 0, taken: {},
   exitI: -1, exitActive: false, monsterHomeI: -1, spawns: [],
-  abilities: {}, allyUnlocked: false,
+  abilities: {},
   players: {}, bots: [],
   monster: { x: 0, y: 0, st: 'wander', target: null },
   startedAt: 0, keysDoneAt: 0, endedAt: 0, win: false,

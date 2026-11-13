@@ -7,9 +7,9 @@
 
 import {
   idx, CFG, makeRng, shuffle, generateMap, publicMapInfo
-} from './escape-map.js?v=20261113r';
-import { createMonster } from './escape-ai.js?v=20261113r';
-import { createBot } from './escape-bot.js?v=20261113r';
+} from './escape-map.js?v=20261114e';
+import { createMonster } from './escape-ai.js?v=20261114e';
+import { createBot } from './escape-bot.js?v=20261114e';
 
 /** 受伤后的无敌时间；主控的 tryRevive 也要用，所以从这里导出 */
 export const INVULN_MS = 900;
@@ -18,7 +18,7 @@ function fresh() {
   return {
     roundId: 0, phase: 'lobby', map: null, info: null, grid: null,
     players: {}, abilities: {}, taken: {}, realTaken: 0, fakePicked: 0,
-    allyUnlocked: false, exitActive: false, monster: null,
+    exitActive: false, monster: null,
     startedAt: 0, keysDoneAt: 0, endedAt: 0, win: false,
     stats: { dmgFake: 0, dmgMonster: 0, reviveCount: 0 },
     review: null, lastSeq: {}, evtId: 0,
@@ -80,7 +80,7 @@ export function createAuthority(fx) {
       A.abilities[id] = abilities[n];
       A.players[id] = {
         id, x: s.x, y: s.y, hp: CFG.HP_MAX, alive: true, reviveUsed: false,
-        invulnUntil: 0, wallCharges: abilities[n] === 4 ? 1 : 0,
+        invulnUntil: 0, wallCharges: 0,
         keysReal: 0, keysFake: 0,
         dmgByFake: 0, dmgByMonster: 0, wallUses: 0, seenFakes: []
       };

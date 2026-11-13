@@ -19,8 +19,9 @@
 
    · 迷宫：生长树（Growing Tree）生成完美迷宫；出口 = 距起点 BFS 最远的通路格，
      必然可通关。CFG.BRANCH_P 控制岔路密度（1 = 一条长廊，越小岔路越多）。
-   · 尺寸：地图边长 30~100 可调；超过 VIEW_MAX 时开摄像机窗口跟随主角，
-     保证任何尺寸下每格在屏幕上都是同样大小。
+   · 尺寸：地图边长 30~100 可调；摄像机窗口**恒定**把主角格钉在画面正中
+     （不钳位：贴边 / 小图也一样），所以任何尺寸下每格在屏幕上都同样大小。
+     窗口探出图外的那一片由 CFG.VOID 补底，读起来就是「迷宫外面」。
    · 迷雾：视野 = 四条正交直线（遇墙即止、墙本身可见）+ 直线通路格的一层四邻
      （路口一瞥 / 墙轮廓）。由 lit 统一提供，敌人显隐、出口、救命线全查它；
      QTE 在 lit 之上还要求「同一条直走廊」（贴脸 1 格例外），见 cellInQteRange。
@@ -52,7 +53,7 @@
   'use strict';
 
   // 版本标记：更新后如果这里还是旧版本号，说明浏览器在用缓存
-  var VER = 'v20261110h';
+  var VER = 'v20261113l';
   try { console.log('%c迷宫寻路 ' + VER, 'color:#35e07a;font-weight:700'); } catch (e) {}
 
   // ==================== CONFIG（想改手感就动这里） ====================
@@ -61,7 +62,7 @@
     MAP_MIN: 30,              // 地图边长下限
     MAP_MAX: 100,             // 地图边长上限
     MAP_DEFAULT: 30,          // 默认地图边长
-    VIEW_MAX: 30,             // 画面一次最多显示多少格；超过则摄像机跟随
+    VIEW_MAX: 30,             // 画面一次最多显示多少格（实际生效值会被取成奇数，见 VIEW）
     PIXEL_BUDGET: 1200,       // 整图离屏画布的目标边长，用来反推每格像素
     CELL_MIN: 10,             // 每格最小像素
     CELL_MAX: 32,             // 每格最大像素
@@ -75,6 +76,11 @@
     // 备选：青灰 '#3d5050'、暖褐 '#4f463c'、旧深蓝青 '#13232b'。
     FLOOR: '#39424c',         // 通路底色（冷石板灰）
     EXIT: '#ff2d2d',          // 出口红格 / 边缘箭头
+    // 地图之外的虚空：摄像机恒定居中，走到贴边时窗口必然探出图外。
+    // 用比墙更暗的深绿（岩体），读起来像「迷宫是从整块岩里挖出来的」，
+    // 比纯黑温柔得多 —— 纯黑在大屏上会被当成「画面没画完」。
+    // 迷雾开启时不用它（会透出地图边界），那片直接铺纯黑，见 draw。
+    VOID: '#16211b',          // 图外虚空底色（无迷雾时）
     DEFAULT_COLOR: '#ffffff', // 默认主角颜色
 
     // ---- 手感 ----
@@ -167,11 +173,21 @@
   var MC = Math.floor((N - 2) / 2);      // 迷宫单元数（通道格 1..2MC-1）
   var CELL = 24;                         // 每格在离屏画布上的像素
   var SIZE = N * CELL;                   // 整图离屏画布边长
-  var VIEW = Math.min(N, CFG.VIEW_MAX);  // 画面可见格数
-  var camX = 0, camY = 0;                // 摄像机左上角所在格
+  // 画面可见格数：**永远取奇数**。摄像机把主角格放到下标 VIEW>>1 上，
+  // 画布正中就是那一格的正中；偶数格时画布正中落在两格交界处，
+  // 主角格只能偏半格，「主角恒在中心」就不成立了。
+  var VIEW = oddView(N);
+  var camX = 0, camY = 0;                // 摄像机左上角所在格（可为负 / 越过 N-VIEW）
 
   // ==================== 小工具 ====================
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+  // 画面可见格数：min(地图边长, VIEW_MAX) 后向下取奇数（见 VIEW 处的说明）。
+  // 下限 3 只是防御，正常地图（>= 30 格）碰不到。
+  function oddView(n) {
+    var v = Math.min(n, CFG.VIEW_MAX);
+    if (!(v & 1)) v--;
+    return Math.max(3, v);
+  }
   // 全项目统一的格坐标边界判定（MC 网格用的是另一套边界，不走这里）
   function inBounds(x, y) { return x >= 0 && x < N && y >= 0 && y < N; }
   function pulse(now) { return 0.5 + 0.5 * Math.sin(now / CFG.PULSE_MS); }
@@ -204,9 +220,9 @@
   var toastBox = $('toast'), toastName = $('toastName'), toastDesc = $('toastDesc');
   var barFill = $('barFill'), genPct = $('genPct'), genTip = $('genTip');
   var preview = $('preview'), cpick = $('cpick'), swatches = $('swatches');
-  var sizeRange = $('sizeRange'), sizeVal = $('sizeVal'), sizeNote = $('sizeNote');
+  var sizeRange = $('sizeRange'), sizeVal = $('sizeVal');
   var fogChk = $('fogChk'), muteBtn = $('muteBtn'), volRange = $('volRange');
-  var hintChk = $('hintChk'), hintField = $('hintField'), hintNote = $('hintNote');
+  var hintChk = $('hintChk'), hintNote = $('hintNote');
   var heartsBox = $('hearts');
   var qteBox = $('qte'), qteKeys = $('qteKeys'), qteBar = $('qteBar'), qteNum = $('qteNum');
   var warnBox = $('qteWarn'), warnBar = $('qteWarnBar');
@@ -294,7 +310,7 @@
     MC = Math.max(2, Math.floor((N - 2) / 2));
     CELL = clamp(Math.round(CFG.PIXEL_BUDGET / N), CFG.CELL_MIN, CFG.CELL_MAX);
     SIZE = N * CELL;
-    VIEW = Math.min(N, CFG.VIEW_MAX);
+    VIEW = oddView(N);
 
     grid = new Uint8Array(N * N);
     explored = new Uint8Array(N * N);
@@ -329,13 +345,16 @@
     exitI = -1;
   }
 
-  function clampCam() {
+  // 摄像机恒定把主角格钉在画面正中 —— 这是「主角永远在中心」的唯一实现点。
+  // 故意**不做钳位**：钳位（旧实现）会在四边和「地图比视野小」两种情况下把主角挤离中心。
+  // 代价是 camX/camY 可以为负、也可以越过 N-VIEW，窗口探出图外的那一片
+  // 由 CFG.VOID 补底（见 blitVisible），读起来就是「迷宫外面」。
+  function centerCam() {
     if (!isFinite(px)) px = 1;
     if (!isFinite(py)) py = 1;
-    if (N <= VIEW) { camX = 0; camY = 0; return; }
-    var half = VIEW >> 1;
-    camX = clamp(px - half, 0, N - VIEW);
-    camY = clamp(py - half, 0, N - VIEW);
+    var half = VIEW >> 1;          // VIEW 必为奇数 → 主角格正对画布正中
+    camX = px - half;
+    camY = py - half;
   }
 
   // ==================== 绘制基础 ====================
@@ -720,13 +739,26 @@
     hudTime.textContent = fmt(elapsed(now));
   }
 
+  // 把离屏整图（底图 / 雾层）按摄像机窗口贴到画面。
+  // 摄像机是「不钳位、恒定居中」的，窗口会探出图外（sx/sy 为负，或右边越过 SIZE），
+  // 这里自己算源与目标的交集：图外那一片不画，留给 draw 里铺的 VOID 底色。
+  // 不直接整块 drawImage 是为了不依赖「源矩形越界时浏览器怎么裁」这种实现细节。
+  function blitVisible(img) {
+    var vw = VIEW * CELL;
+    var sx = camX * CELL, sy = camY * CELL;
+    var x0 = Math.max(0, sx), y0 = Math.max(0, sy);
+    var x1 = Math.min(SIZE, sx + vw), y1 = Math.min(SIZE, sy + vw);
+    if (x1 <= x0 || y1 <= y0) return;          // 整张图都在画面外
+    ctx.drawImage(img, x0, y0, x1 - x0, y1 - y0, x0 - sx, y0 - sy, x1 - x0, y1 - y0);
+  }
+
   // 迷雾层：进迷宫就整片覆盖，不做「先亮一下再淡入」。
   // 雾层自己已经把 lit 格挖空，这里只负责贴上去。
   // 原来的「硬保险」是整块 5×5 贴回底图 —— 它恰恰是穿墙的元凶，已删除；
   // 换成自愈：万一视野没算过（例如刚换过地图尺寸），补算一次，避免整屏黑。
-  function drawFog(vw) {
+  function drawFog() {
     if (litList.length === 0) rebuildFog();
-    ctx.drawImage(fogc, camX * CELL, camY * CELL, vw, vw, 0, 0, vw, vw);
+    blitVisible(fogc);
   }
 
   // 出口红格平时只有「真的被照亮」时才画：迷雾里不许透出来指路。
@@ -779,8 +811,8 @@
     ctx.clip();
   }
 
-  // clampCam 保证摄像机窗口恒在 [0,N) 内，所以过了窗口检查就必然 inBounds，
-  // 不必再判一次全图边界；窗口外的格子本来也不会画出来。
+  // 摄像机窗口 = 画面里那 VIEW×VIEW 格（恒定居中在主角身上），
+  // 窗口外的格子本来也画不出来，这里只判窗口，不必再碰全图边界。
   function addClipCell(x, y) {
     if (x < camX || x >= camX + VIEW || y < camY || y >= camY + VIEW) return;
     ctx.rect((x - camX) * CELL, (y - camY) * CELL, CELL, CELL);
@@ -798,8 +830,13 @@
       // 迷雾开就什么都不画 —— 否则这一屏就把整张地图剧透了，迷雾等于白开。
       if (canDraw && !fogOn) ctx.drawImage(bgc, 0, 0, SIZE, SIZE, 0, 0, vw, vw);
     } else if (canDraw) {
-      ctx.drawImage(bgc, camX * CELL, camY * CELL, vw, vw, 0, 0, vw, vw);
-      if (fogOn && inGame()) drawFog(vw);
+      // 先铺一层图外虚空：摄像机居中后贴边必然有一块是地图之外，
+      // 不铺的话那块会留着上一帧的残影（canvas 每帧不整体清空）。
+      // 迷雾下必须用纯黑 —— 否则这块比雾更亮的岩体就把地图边界透出去了。
+      ctx.fillStyle = fogOn ? '#000000' : CFG.VOID;
+      ctx.fillRect(0, 0, vw, vw);
+      blitVisible(bgc);
+      if (fogOn && inGame()) drawFog();
     }
 
     if (exitI >= 0 && inGame()) {
@@ -919,7 +956,7 @@
       return (i >= 0 && i < N * N && bfsSeen[i] === bfsGen) ? bfsDist[i] : -1;
     },
     tp: function (x, y) {
-      px = x; py = y; clampCam(); rebuildFog();
+      px = x; py = y; centerCam(); rebuildFog();
       // 调试用的瞬移跟宝物传送一样是「跳跃」，轨迹里也得留个断点
       var i = y * N + x;
       if (walkTrail.length) { walkTrail.push(i); walkBreaks.push(walkTrail.length - 1); }
@@ -1159,6 +1196,8 @@
   }
 
   // 单格是否在「视野」里：迷雾下统一查 lit（唯一真源），无迷雾下是摄像机窗口。
+  // 窗口是恒定居中的 VIEW×VIEW 格（见 centerCam），所以「出了画面」永远等价于
+  // 「不在窗口里」—— 主角钉在正中，窗口外的格子玩家确实看不到。
   // 敌人显隐、出口红格、QTE 判定、救命线裁剪全走这里，不允许各自再算距离。
   function cellLit(ex, ey) {
     if (ex < camX || ex >= camX + VIEW || ey < camY || ey >= camY + VIEW) return false;
@@ -2068,7 +2107,7 @@
     walkBreaks.push(walkTrail.length - 1);
     lastCell = -1;                 // 上一格已经没意义了，别让「背后刷怪」放到老位置
     invulnUntil = Math.max(invulnUntil, now + CFG.TP_GRACE_MS);
-    clampCam();
+    centerCam();
     rebuildFog();
     beep(220, 0.18, 'sawtooth', 0.06);
     setTimeout(function () { beep(330, 0.12, 'square', 0.04); }, 90);
@@ -2125,7 +2164,7 @@
     walkTrail.length = 0;
     walkBreaks.length = 0;
     walkTrail.push(1 * N + 1);
-    clampCam();
+    centerCam();
     resetFog();   // 迷雾立即生效：进来只剩身周一小块视野，整图不给看
 
     // 先解除遮罩再动别的 UI：万一后面任何一步出异常，也不会把画面锁在黑屏上
@@ -2155,7 +2194,7 @@
     var here = py * N + px;
     walked[here] = 1;
     walkTrail.push(here);      // 路线回放：一次移动 = 轨迹里一格
-    clampCam();
+    centerCam();
     rebuildFog();
     beep(520 + Math.random() * 40, 0.03, 'square', 0.022);
     collectTreasureAt(here);   // 人与宝物重叠即收集
@@ -2401,19 +2440,20 @@
     } catch (e) { /* 隐私模式或 file:// 下可能被拒，忽略即可 */ }
   }
 
+  // 尺寸标签只更新数字：画面永远跟随主角（摄像机不钳位），
+  // 所以那张「画面会跟随主角移动」的说明对所有尺寸都成立，是静态文案，不再按尺寸显隐。
   function renderSizeLabel() {
     sizeVal.textContent = mapSize + '×' + mapSize;
-    sizeNote.hidden = mapSize <= CFG.VIEW_MAX;
   }
 
-  // 终点指引只在「地图比画面大」时才有意义（小图整张都在画面里，出口必然可见）
+  // 摄像机恒定居中之后，「整张迷宫都在画面里」这种小图不再存在
+  // （窗口只有 VIEW×VIEW 格，主角又钉在正中），
+  // 所以终点指引对任何尺寸都有意义，这一行不再按尺寸淡出。
   function renderHintRow() {
-    var usable = mapSize > CFG.VIEW_MAX;
-    hintField.classList.toggle('dim', !usable);
-    if (!usable) hintNote.textContent = '整张迷宫都在画面内，出口必定可见';
-    else if (hintOn) hintNote.textContent = '出口不在画面内时，边缘出现呼吸红箭头';
-    // 只有「大图 + 关掉指引」时才真的藏起来，其余两种情况都显示对应说明
-    hintNote.hidden = usable && !hintOn;
+    hintNote.textContent = hintOn
+      ? '出口不在画面内时，边缘出现呼吸红箭头'
+      : '已关闭：出口跑出画面就没有方向提示';
+    hintNote.hidden = !hintOn;
   }
 
   sizeRange.addEventListener('input', function () {

@@ -4,7 +4,7 @@
    lit 是唯一显隐真源；任何能力都不许往 lit 里塞格子
    ============================================================ */
 
-import { N, idx, xOf, yOf, inBounds, clamp } from './escape-map.js?v=20261113l';
+import { N, idx, xOf, yOf, inBounds, clamp } from './escape-map.js?v=20261113r';
 
 // 底图在四周各留 VIEW 格空白，摄像机才可以把玩家恒定放在窗口正中
 export const MAP_PAD = 15;

@@ -6,11 +6,11 @@
    人机只认真钥匙：假钥匙留给人类用能力判断，人机不作弊也不白掉血。
    ============================================================ */
 
-import { idx, xOf, yOf, bfsDistances, bfsStep } from './escape-map.js?v=20261113l';
+import { idx, xOf, yOf, bfsDistances, bfsStep } from './escape-map.js?v=20261113r';
 
 export const BOT = {
   STEP_MS: 270,       // 常规移动间隔（玩家按住键是 160ms，人机略慢）
-  FLEE_MS: 160,       // 逃跑间隔：快过怪物追击的 200ms，才可能真正甩掉它
+  FLEE_MS: 160,       // 逃跑间隔：快过怪物追击的 240ms，才可能真正甩掉它
   RUSH_MS: 180,       // 冲向终点汇合时提速
   PATH_MS: 520,       // 路径 / 目标重算间隔
   FLEE_REPLAN_MS: 350,// 逃跑落点重算间隔

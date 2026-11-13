@@ -5,17 +5,17 @@
 
 import {
   N, idx, inBounds, CFG, unpackGrid, hashGrid
-} from './escape-map.js?v=20261113l';
-import { computeSight, centerCam, FOG_SIGHT, FOG_PEEK } from './escape-fog.js?v=20261113l';
-import { tickMonster, publicMonster } from './escape-ai.js?v=20261113l';
-import { tickBots } from './escape-bot.js?v=20261113l';
-import { createRenderer } from './escape-render.js?v=20261113l';
-import { createUI } from './escape-ui.js?v=20261113l';
-import { createSfx } from './escape-sfx.js?v=20261113l';
+} from './escape-map.js?v=20261113r';
+import { computeSight, centerCam, FOG_SIGHT, FOG_PEEK } from './escape-fog.js?v=20261113r';
+import { tickMonster, publicMonster } from './escape-ai.js?v=20261113r';
+import { tickBots } from './escape-bot.js?v=20261113r';
+import { createRenderer } from './escape-render.js?v=20261113r';
+import { createUI } from './escape-ui.js?v=20261113r';
+import { createSfx } from './escape-sfx.js?v=20261113r';
 import {
-  createNet, createSoloNet, parseQuery, extractRoomId, GAME0
-} from './escape-net.js?v=20261113l';
-import { createAuthority, INVULN_MS } from './escape-authority.js?v=20261113l';
+  createNet, createSoloNet, parseQuery, normalizeRoomId, GAME0
+} from './escape-net.js?v=20261113r';
+import { createAuthority, INVULN_MS } from './escape-authority.js?v=20261113r';
 
 const STEP_MS = 160;      // 每格间隔（约 6 格/秒）
 const PUSH_MS = 50;
@@ -105,6 +105,9 @@ let pendingReveal = null;
 let seenEvt = {};
 let inputSeq = 0;
 let holdDir = null, holdAt = 0, pendingWall = false;
+/** 按住中的方向键（按先后顺序，最后按下的那个生效）。放在这里而不是事件绑定处，
+    是因为 resetView / releaseHold 都会用到它，早声明免得踩 TDZ。 */
+const pressedKeys = [];
 let backArmUntil = 0;  // 音乐条右上「返回房间」的两段式确认窗口
 let lastPush = 0, lastSightTick = 0, lastHud = 0, lastHudH = -1;
 let botRoster = [];    // 房主维护的人机名单（大厅座位）
@@ -228,19 +231,29 @@ function updateBackRoomBtn() {
 }
 
 function setPhase(name) {
+  const wasPlaying = phase === 'playing';
   phase = name;
   ui.showOnly(name);
   if (name === 'lobby') renderLobby();
   if (name === 'abilities') renderAbility();
   if (name === 'review') ui.showReview(viewGame.review || auth.emptyReview());
   if (name === 'playing') {
-    renderHUD(); renderButtons();
+    renderHUD();
     resetSfxTrackers();
     sfx.play('start');       // 「可以动了」——每个客户端都会走到这里，不必依赖 START 事件
     // 立刻画一帧：帧循环只在局内画，若等下一帧才画，切进对局会闪一下黑，
     // 而且 lastSight 要到这里才有值（tickDanger 与 EscapeDebug.lit 都读它）
     renderFrame(performance.now());
+  } else if (wasPlaying) {
+    // 离开局内：松掉按住的方向，并撤销「下一次移动穿墙」的预约。
+    // 否则在大厅/结算期间点过穿墙、或按着方向键被结算，状态会带进下一局。
+    releaseHold();
+    pendingWall = false;
   }
+  // 局内按钮（穿墙 / 抢救 / 观战切换）只在 phase === 'playing' 出现，阶段一变就重算。
+  // 原来只有 playing 分支和帧循环会刷新，结束 → 复盘 → 回大厅后没人再调，
+  // 按钮就一直挂在 .side 上（遮罩只盖 .stagewrap，盖不到 .side）。
+  renderButtons();
   updateBackRoomBtn();
 }
 
@@ -292,6 +305,7 @@ function resetSession(status) {
   pendingReveal = null;
   seenEvt = {};
   holdDir = null; holdAt = 0; pendingWall = false;
+  pressedKeys.length = 0;
   lastViewPos = null;
   resetSfxTrackers();
   clearRoom();
@@ -325,7 +339,11 @@ function colorOf(id) {
 function shortName(id) {
   const b = botInfo(id);
   if (b) return b.name;
-  return id === selfId ? '我' : String(id).slice(0, 6);
+  if (id === selfId) return ui.getName() || '我';
+  // 队友在开场页填的名字：飘字、座位、复盘都走这里，所以一处改动全链路生效
+  const p = profiles[id];
+  const n = p && String(p.name || '').trim();
+  return n || String(id).slice(0, 6);
 }
 
 function userIds() {
@@ -585,21 +603,22 @@ function renderHUD() {
 }
 
 function renderButtons() {
+  const inGame = phase === 'playing';
   const me = viewGame.players[selfId];
   const alive = !!(me && me.alive);
   let reviveTarget = null;
-  if (alive) {
+  if (inGame && alive) {
     Object.keys(viewGame.players).forEach(id => {
       const p = viewGame.players[id];
       if (!p.alive && !p.reviveUsed && p.x === me.x && p.y === me.y) reviveTarget = id;
     });
   }
   ui.renderButtons({
-    showWall: alive && myAbility() === 4,
+    showWall: inGame && alive && myAbility() === 4,
     wallCharges: me ? me.wallCharges : 0,
     showRevive: !!reviveTarget,
     reviveName: reviveTarget ? shortName(reviveTarget) : '',
-    spectating: !alive
+    spectating: inGame && !alive
   });
 }
 
@@ -792,7 +811,10 @@ function loop(now) {
         const p = A.players[id];
         return { id, x: p.x, y: p.y, alive: p.alive, invulnUntil: p.invulnUntil };
       });
-      const hits = tickMonster(A.monster, A.grid, plist, now);
+      const hits = tickMonster(A.monster, A.grid, plist, Date.now());
+      // ↑ 必须用 Date.now()：怪物要比对 p.invulnUntil，而那个值是 authority.damage()
+      //   用 Date.now() 写进去的。传 rAF 的 now（页面启动毫秒）会让「现在 < 无敌到期」
+      //   恒成立 —— 第一次被撞之后玩家就永久免疫，表现就是怪物贴着却再也咬不动。
       for (let i = 0; i < hits.length; i++) auth.damage(hits[i].userId, 'monster');
       if (now - lastSightTick >= SIGHT_TICK_MS) { lastSightTick = now; tickAbilitySight(); }
       if (now - lastPush >= PUSH_MS) { lastPush = now; publish(); }
@@ -956,7 +978,7 @@ net.on('onFallback', info => {
   ui.setRelayUI(strategy, '');
   setStatus('原中继全部不可达，已自动切到 ' +
     (strategy === 'torrent' ? 'BitTorrent' : 'Nostr') +
-    '（房间号 ' + info.shortCode + '）。请重新复制邀请链接发给队友。');
+    '（房间号 ' + info.shortCode + '）。把新房间号重新告诉大家，并确认他们那边的「中继」也一致。');
 });
 net.on('onStatus', err => {
   const code = err && err.code;
@@ -995,7 +1017,7 @@ function describeProbe(r) {
 async function afterJoin() {
   joined = true;
   selfId = net.selfId;
-  net.setProfile({ color: ui.getColor(), closed: false, closedRound: 0, spectateTo: null });
+  net.setProfile({ name: ui.getName(), color: ui.getColor(), closed: false, closedRound: 0, spectateTo: null });
   if (net.isHost) publish();   // 立刻把房主状态（含人机名单）写进共享状态，客端才知道谁是人机
   renderLobby();
   // 断线重进：join 期间 joined 还是 false，onGame 只更新快照、不切页面，
@@ -1023,8 +1045,8 @@ async function doCreate(resumeShort) {
     }, iceOpts()));
     await afterJoin();
     setStatus(resumeShort
-      ? '房间已恢复（' + info.shortCode + '）。刷新把本局状态带走了，全队回到大厅，邀请链接不用重发。'
-      : '房间已创建。短码 ' + info.shortCode + '，复制邀请链接发给队友；人数不够可添加人机。');
+      ? '房间 ' + info.shortCode + ' 已恢复，本局已回到大厅。'
+      : '房间 ' + info.shortCode + ' 已创建，把号码发给队友。');
   } catch (e) {
     setStatus('创建失败：' + ((e && e.message) || e));
   }
@@ -1047,10 +1069,25 @@ function relayFromText(text) {
   } catch (e) { return ''; }
 }
 
+/** 等房主出现。短码进房时没有 ~ 后缀可以抄房主的 peerId，只能等房间状态送过来，
+    而公共中继的首次订阅 + 握手实测要 5 秒上下，所以窗口必须给足 ——
+    太短会自己把房间销毁掉，表现就是「明明有人却提示房间没响应」。 */
+async function waitHost(maxMs) {
+  const t0 = performance.now();
+  let shown = -1;
+  while (performance.now() - t0 < maxMs) {
+    if (net.isHost || net.hostUserId) return true;
+    const sec = Math.floor((performance.now() - t0) / 1000);
+    if (sec !== shown) { shown = sec; setStatus('正在连接房主… ' + sec + 's'); }
+    await new Promise(r => setTimeout(r, 200));
+  }
+  return !!(net.isHost || net.hostUserId);
+}
+
 async function doJoin(text) {
-  const id = extractRoomId(text);
-  if (!id || id.indexOf('~') < 0) {
-    setStatus('请粘贴完整邀请链接或房间号（含 ~ 后缀）');
+  const id = normalizeRoomId(text);
+  if (!id || id.indexOf('escape-') !== 0) {
+    setStatus('请输入 6 位房间号（例如 123456）');
     return;
   }
   strategy = strategyFromText(text);
@@ -1063,6 +1100,17 @@ async function doJoin(text) {
       strategy, relayUrl, identityNone: q.identityNone
     }, iceOpts()));
     await afterJoin();
+    // afterJoin 里的 requestSync 已经给过 2.5 秒；再留一点余量。
+    // 仍然认不出房主 = 房间号错了 / 房里没人 / 双方不在同一条中继上。
+    if (!(await waitHost(12000))) {
+      await net.leave();
+      joined = false;
+      setStatus('房间 ' + (id.replace('escape-', '')) + ' 没有响应。检查房间号是否输错；'
+        + '若房主改过「中继」，两边要选同一条（默认都是 Nostr）。');
+      setPhase('lobby');
+      renderLobby();
+      return;
+    }
     setStatus(phase === 'playing' ? '已回到进行中的对局。'
       : phase === 'abilities' ? '已回到对局（正在选能力）。'
       : phase === 'review' ? '本局已结束，正在看结算。'
@@ -1085,7 +1133,7 @@ async function resumeRoom() {
     await doCreate(saved.short || '');
     // 只有 userId 真变了（换浏览器 / 清过站点数据）房间号才会不同，老链接就废了
     if (saved.room && net.fullRoomId !== saved.room) {
-      ui.toast('房间号变了（浏览器身份丢了），请重新发邀请链接');
+      ui.toast('房间号变了（浏览器身份丢了），请把新房间号重新告诉大家');
     }
     return;
   }
@@ -1112,18 +1160,20 @@ ui.bind({
   onCreate: doCreate,
   onJoin: doJoin,
   onCopyInvite: () => {
-    const url = net.inviteUrl();
-    if (!url) {
-      setStatus('当前是 file:// 直接打开的，生成不了邀请链接：请用 GitHub Pages 或局域网 http 地址访问');
-      return;
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url)
-        .then(() => ui.toast('邀请链接已复制'))
-        .catch(() => { setStatus('请手动复制：' + url); });
-    } else {
-      setStatus('请手动复制：' + url);
-    }
+    // 只复制 6 位房间号：客人在「加入房间」里输这 6 位就能进，不需要长链接。
+    // 链接里那些 s= / u= 是信令策略与中继，短码路径下两边都用默认值即可。
+    const code = net.shortCode || '';
+    if (!code) { setStatus('还没创建房间，没有房间号可复制。'); return; }
+    const put = () => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code)
+          .then(() => ui.toast('房间号 ' + code + ' 已复制'))
+          .catch(() => setStatus('请手动记下房间号：' + code));
+      } else {
+        setStatus('请手动记下房间号：' + code);
+      }
+    };
+    put();
   },
   onLeave: async () => {
     await net.leave();
@@ -1162,7 +1212,7 @@ ui.bind({
   },
   onWall: () => {
     const me = viewGame.players[selfId];
-    if (myAbility() !== 4 || !me || !me.alive || me.wallCharges <= 0) return;
+    if (phase !== 'playing' || myAbility() !== 4 || !me || !me.alive || me.wallCharges <= 0) return;
     pendingWall = true;
     ui.toast('下一次移动将穿透一格墙');
   },
@@ -1187,7 +1237,8 @@ ui.bind({
     net.setProfile({ spectateTo: ids[i] });
   },
   onRelayChange: (s, url) => { strategy = s; relayUrl = url; },
-  onColor: c => { if (joined) net.setProfile({ color: c }); }
+  onColor: c => { if (joined) net.setProfile({ color: c }); },
+  onName: n => { if (joined) net.setProfile({ name: n }); }
 });
 
 // 键盘展开/收起后只重算键帽与上推量，不跑 fit()，画面尺寸保持不变
@@ -1205,18 +1256,44 @@ document.addEventListener('click', e => {
 function isTyping(t) {
   return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
 }
+/** 真键盘：与虚拟键盘共用同一套 holdDir/holdAt 状态机，节奏必须是 STEP_MS 一格。 */
 window.addEventListener('keydown', e => {
   if (isTyping(e.target)) return;
   const d = KEYMAP[e.key];
   if (!d) return;
   e.preventDefault();
+  // 系统按键重复一律丢弃（和迷宫同一个理由，但这里的后果更严重）：
+  // 浏览器按住方向键约 30 次/秒重复派发 keydown，每次都会把 holdAt 重置成
+  // 「现在 - STEP_MS」，tickInput 于是每帧都放行、房主侧 tryMove 又不节流 ——
+  // 按住半秒后会从 6 格/秒变成 60 格/秒。虚拟键盘只有一次 pointerdown，
+  // 丢掉 repeat 之后两边都严格是 STEP_MS 一格。
+  if (e.repeat) return;
+  if (pressedKeys.indexOf(e.key) < 0) pressedKeys.push(e.key);
   holdDir = d;
   holdAt = performance.now() - STEP_MS;
 });
+
 /** 松手：清掉按住方向，同时允许下一次撞墙重新出声
     （长按顶墙只响一次，松手再按又是一下） */
-function releaseHold() { holdDir = null; bumpDir = null; }
-window.addEventListener('keyup', e => { if (KEYMAP[e.key]) releaseHold(); });
+function releaseHold() { holdDir = null; bumpDir = null; pressedKeys.length = 0; }
+
+window.addEventListener('keyup', e => {
+  if (!KEYMAP[e.key]) return;
+  const i = pressedKeys.indexOf(e.key);
+  if (i < 0) return;
+  pressedKeys.splice(i, 1);
+  // 松开的正是「当前生效」的那个方向（即最后按下的）：还按着别的方向键就平滑接上，
+  // 一个都不剩才真的停住。否则斜着走换向时一松手就顿在原地。
+  if (i === pressedKeys.length) {
+    const next = pressedKeys[pressedKeys.length - 1];
+    if (next) {
+      holdDir = KEYMAP[next];
+      holdAt = performance.now() - STEP_MS;
+    } else {
+      releaseHold();
+    }
+  }
+});
 window.addEventListener('blur', releaseHold);
 ui.els.pad.querySelectorAll('button').forEach(b => {
   b.addEventListener('pointerdown', ev => {

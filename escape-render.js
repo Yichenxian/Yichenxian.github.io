@@ -3,8 +3,8 @@
    底图（离屏整图）→ 雾层（离屏）→ 实体（只查 lit）→ 能力叠加层 / 箭头
    ============================================================ */
 
-import { N, idx, xOf, yOf } from './escape-map.js?v=20261113l';
-import { VIEW, MAP_PAD, drawFog, projectEdge } from './escape-fog.js?v=20261113l';
+import { N, idx, xOf, yOf } from './escape-map.js?v=20261113r';
+import { VIEW, MAP_PAD, drawFog, projectEdge } from './escape-fog.js?v=20261113r';
 
 export const COLORS = {
   WALL: '#8f1d2c',
@@ -175,17 +175,30 @@ export function createRenderer(canvas) {
     // ---- 怪物（只在照亮时可见） ----
     if (data.monster && lit[idx(data.monster.x, data.monster.y)] && inView(data.monster.x, data.monster.y)) {
       const mx = sx(data.monster.x) + cell / 2, my = sy(data.monster.y) + cell / 2;
-      const r = cell * 0.4;
+      // 僵直：撞完人自己「喘气」——缩小、红晕收敛、头顶转圈的小点，玩家一眼就知道该跑了
+      const stunned = data.monster.st === 'stun';
+      const r = cell * (stunned ? 0.3 : 0.4);
       const g = ctx.createRadialGradient(mx, my, 0, mx, my, r * 1.6);
-      g.addColorStop(0, 'rgba(255,60,60,0.55)');
+      g.addColorStop(0, stunned ? 'rgba(255,150,90,0.4)' : 'rgba(255,60,60,0.55)');
       g.addColorStop(1, 'rgba(255,60,60,0)');
       ctx.fillStyle = g;
       ctx.fillRect(mx - r * 1.6, my - r * 1.6, r * 3.2, r * 3.2);
       ctx.fillStyle = COLORS.MONSTER;
       ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = COLORS.MONSTER_EYE;
+      ctx.fillStyle = stunned ? 'rgba(255,212,90,0.7)' : COLORS.MONSTER_EYE;
       ctx.beginPath(); ctx.arc(mx - r * 0.35, my - r * 0.1, r * 0.16, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.arc(mx + r * 0.35, my - r * 0.1, r * 0.16, 0, Math.PI * 2); ctx.fill();
+      if (stunned) {
+        // 头顶三颗转圈的「眩晕星」
+        ctx.fillStyle = 'rgba(255,212,90,0.95)';
+        for (let s = 0; s < 3; s++) {
+          const a = (data.now / 700) * Math.PI * 2 + s * (Math.PI * 2 / 3);
+          ctx.beginPath();
+          ctx.arc(mx + Math.cos(a) * cell * 0.34, my + Math.sin(a) * cell * 0.34 - cell * 0.18,
+            Math.max(1.4, cell * 0.06), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
 
     // ---- 玩家 / 尸体 ----

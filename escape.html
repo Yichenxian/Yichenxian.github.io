@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>合作逃生 · 四人联机</title>
-<link rel="stylesheet" href="escape.css?v=20261113l">
+<link rel="stylesheet" href="escape.css?v=20261113r">
 </head>
 <body>
 
@@ -86,6 +86,10 @@
           <div class="ov-panel" id="startView">
             <h1 class="ov-title">合作逃生</h1>
             <p class="ov-sub">四人分头搜集钥匙，避开游荡的怪物，全员汇合终点。</p>
+            <div class="lobby-line name-line">
+              <span class="lobby-label">你的名字</span>
+              <input class="field" id="nameInput" type="text" maxlength="8" placeholder="最多 8 个字" autocomplete="off" spellcheck="false">
+            </div>
             <button class="btn primary" id="btnStart" type="button">开始游戏</button>
             <!-- 刷新后才知道自己刚才在哪个房间：客端按原 roomId 重进，房主复用短码重建 -->
             <button class="btn ghost" id="btnResume" type="button" hidden>回到上次的房间</button>
@@ -97,10 +101,10 @@
             <div class="lobby-line">
               <span class="lobby-label">房间号</span>
               <strong class="lobby-code" id="roomCode">------</strong>
-              <button class="btn tiny" id="btnCopyInvite" type="button">复制邀请链接</button>
+              <button class="btn tiny" id="btnCopyInvite" type="button">复制房间号</button>
             </div>
             <div class="lobby-line">
-              <input class="field" id="roomInput" type="text" placeholder="粘贴完整房间号 / 邀请链接" autocomplete="off" spellcheck="false">
+              <input class="field" id="roomInput" type="text" placeholder="输入 6 位房间号" autocomplete="off" spellcheck="false">
               <button class="btn tiny" id="btnJoinRoom" type="button">加入</button>
               <button class="btn tiny" id="btnCreateRoom" type="button">创建房间</button>
             </div>
@@ -130,10 +134,10 @@
             <p class="ov-tip net-note" id="netNote" hidden></p>
             <div class="roster" id="roster"></div>
             <div class="color-row">
-              <span class="lobby-label">我的颜色</span>
+              <input class="field name-field" id="nameInputLobby" type="text" maxlength="8" placeholder="我的名字" autocomplete="off" spellcheck="false">
               <span class="preview" id="colorPreview"></span>
               <div class="swatches" id="swatches"></div>
-              <label class="picker"><span>自定义</span><input type="color" id="cpick" value="#ffffff"></label>
+              <label class="picker" title="自定义颜色"><span>自定义</span><input type="color" id="cpick" value="#ffffff"></label>
             </div>
             <div class="lobby-actions">
               <button class="btn primary" id="btnStartGame" type="button" disabled>等待玩家 1 / 4</button>
@@ -141,7 +145,7 @@
               <button class="btn tiny" id="btnAddBot" type="button" hidden>添加人机</button>
               <button class="btn tiny" id="btnRemoveBot" type="button" hidden>移除人机</button>
             </div>
-            <p class="ov-tip" id="lobbyStatus">创建房间并把邀请链接发给另外三位队友。</p>
+            <p class="ov-tip" id="lobbyStatus">创建房间，把 6 位房间号发给另外三位队友。</p>
           </div>
         </div>
 
@@ -241,8 +245,8 @@ window.MazeAudio = (function () {
   return { ensure: ensure, get ctx() { return ac; } };
 })();
 </script>
-<script src="bitcrush.js?v=20261113l"></script>
-<script src="maze-music.js?v=20261113l"></script>
-<script type="module" src="escape-main.js?v=20261113l"></script>
+<script src="bitcrush.js?v=20261113r"></script>
+<script src="maze-music.js?v=20261113r"></script>
+<script type="module" src="escape-main.js?v=20261113r"></script>
 </body>
 </html>

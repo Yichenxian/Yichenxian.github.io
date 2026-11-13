@@ -1,11 +1,11 @@
 /* ============================================================
    合作逃生 · trystero 0.27 联机封装（纯静态，无后端、无构建）
-   房主 roles({selfAsAdmin:true}) → makeState 默认 admin-only 写入
-   客端 roles() + 完整带 ~ 的 roomId
+   入房只需 6 位房间号：房主 joinRoom('escape-'+短码)，客端同样，
+   房主的 peerId 从房间状态（publicGame.hostUserId）里认，不靠链接后缀。
+   注意：cfg.use 里不要装 roles —— 实测会让两端互相看不见（见 setupChannels 注释）。
    ============================================================ */
 
-export const APP_ID = 'harness-escape/2026';
-const VER = 'v=20261113l';
+export const APP_ID = 'harness-escape-2026';
 
 export const GAME0 = {
   phase: 'lobby', roundId: 0, hostUserId: '',
@@ -45,6 +45,20 @@ export function parseQuery() {
    换自己的服务：?turn=turn:h:3478,turns:h:5349&turnuser=u&turnpass=p
    只留 STUN：?turn=0
    公共 TURN 可能随时失效 —— 大厅「网络自检」会报告它到底通不通。 */
+/** 默认信令中继 —— **两端必须完全一致**才能碰头。
+    trystero 的内置池是 30 条里随机取 5 条，房主和访客各随机一次，大概率错开；
+    这正是以前必须把 u= 塞进邀请链接里的原因。改成「只报 6 位房间号」以后，
+    没有任何地方能传这串地址，所以默认值必须固定（2026-11-13 实测可连、允许匿名写入）。
+    想让两端换一批：大厅「中继」里选同一组，或填同一串自定义 wss。
+    BitTorrent 策略走内置 tracker，本来就是固定的，不受这里影响。 */
+const DEFAULT_RELAYS = [
+  'wss://nostr.azzamo.net',
+  'wss://nostr.data.haus',
+  'wss://nostr.chaima.info',
+  'wss://nostr.hifish.org',
+  'wss://nostr.sathoarder.com'
+];
+
 const STUN_URLS = [
   'stun:stun.cloudflare.com:3478',
   'stun:stun.l.google.com:19302',
@@ -129,6 +143,18 @@ function probeIce(opts, timeoutMs) {
   });
 }
 
+/** 把用户输入的任意形式归一成 trystero 的房间名：
+    123456 / escape-123456 / escape-123456~peerId / 邀请链接 都能认。
+    只报 6 位短码时补上 escape- 前缀 —— 房主建房用的就是 'escape-' + 短码，
+    所以短码本身就足以入房，不需要链接里的 ~ 后缀（房主的 peerId 会从房间状态里认）。 */
+export function normalizeRoomId(text) {
+  const raw = extractRoomId(text);
+  if (!raw) return '';
+  const t = String(raw).trim();
+  if (/^\d{4,8}$/.test(t)) return 'escape-' + t;
+  return t;
+}
+
 /** 支持粘贴完整房间号，也支持直接粘贴邀请链接 */
 export function extractRoomId(text) {
   if (!text) return '';
@@ -158,7 +184,9 @@ function sixDigit() {
 
 async function loadStrategy(strategy) {
   const file = strategy === 'torrent' ? 'trystero-torrent.mjs' : 'trystero.mjs';
-  return await import('./vendor/' + file + '?' + VER);
+  // 不能带 ?v= 查询串：带与不带在浏览器里是两个模块实例，而 trystero 用
+  // Symbol.for('trystero.slot') 这类**全局**槽位管房间，两份实例会各自记账。
+  return await import('./vendor/' + file);
 }
 
 export function createNet() {
@@ -197,6 +225,9 @@ export function createNet() {
     if (turn.length) cfg.turnConfig = turn;
     if (relayUrl) {
       cfg.relayConfig.urls = relayUrl.split(',').map(s => s.trim()).filter(Boolean);
+    } else if (strategy !== 'torrent') {
+      // 不给就固定这一组，别落回 trystero 的「随机 5/30」—— 那会让两端错开
+      cfg.relayConfig.urls = DEFAULT_RELAYS;
     }
     return cfg;
   }
@@ -212,19 +243,28 @@ export function createNet() {
   }
 
   function setupChannels() {
-    profile = room.makeUserState('profile', { color: '#ffffff', closed: false, closedRound: 0, spectateTo: null });
+    profile = room.makeUserState('profile', { name: '', color: '#ffffff', closed: false, closedRound: 0, spectateTo: null });
     game = room.makeState('game', GAME0, { maxBytes: 65536 });
     actInput = room.makeAction('input');
-    actEvt = room.makeAction('evt', { roles: ['admin'] });
-    actReveal = room.makeAction('reveal', { roles: ['admin'] });
+    actEvt = room.makeAction('evt');
+    actReveal = room.makeAction('reveal');
     actSync = room.makeAction('sync', { kind: 'request' });
 
-    game.onChange((v, ctx) => emit('onGame', v, ctx), { replay: true });
+    game.onChange((v, ctx) => {
+      // 客人靠这一句认出房主。publicGame 里本来就带 hostUserId，所以「只报 6 位短码」
+      // 也能进房 —— 不必让客人从邀请链接的 ~ 后缀里抄房主的 22 位 peerId。
+      // 认出之前 hostUserId 为空，输入走广播、evt 不过滤，认得之后自动切成定向。
+      if (!isHost && v && v.hostUserId && v.hostUserId !== hostUserId) {
+        hostUserId = v.hostUserId;
+        emitUsers();
+      }
+      emit('onGame', v, ctx);
+    }, { replay: true });
     actEvt.onMessage((d, ctx) => {
-      if (ctx && ctx.userId === hostUserId) emit('onEvent', d, ctx);
+      if (!hostUserId || (ctx && ctx.userId === hostUserId)) emit('onEvent', d, ctx);
     });
     actReveal.onMessage((d, ctx) => {
-      if (ctx && ctx.userId === hostUserId) emit('onReveal', d, ctx);
+      if (!hostUserId || (ctx && ctx.userId === hostUserId)) emit('onReveal', d, ctx);
     });
     actInput.onMessage((d, ctx) => {
       if (isHost) emit('onInput', d, ctx);
@@ -274,7 +314,10 @@ export function createNet() {
     // 自动换信令时保留同一个短码；房主刷新恢复时用传进来的短码
     if (!shortCode) shortCode = o.shortCode || sixDigit();
     const cfg = baseConfig(o);
-    cfg.use = [mod.roles({ selfAsAdmin: true })];
+    // 故意不装 roles 中间件：实测 vendor 里这份 trystero 只要 cfg.use 带了 roles，
+    // 房主与客端就永远看不到彼此（同一个 roomId 下 onPeerJoin 一次都不触发，
+    // 对照实验里去掉 use 立刻互通）。而 roles 原本只用来限制「谁能写 game / 谁能发 evt」，
+    // 这两件事现在都由接收端按 hostUserId 过滤 + setGame 里 isHost 早退兜住了，不需要它。
     room = mod.joinRoom(cfg, 'escape-' + shortCode);
     const self = await room.getSelf();
     selfId = self.userId;
@@ -298,11 +341,13 @@ export function createNet() {
     identityNone = o.identityNone;
     mod = await loadStrategy(strategy);
     const cfg = baseConfig(o);
-    cfg.use = [mod.roles()];
+
     room = mod.joinRoom(cfg, fullId);
     const self = await room.getSelf();
     selfId = self.userId;
     fullRoomId = self.roomId || fullId;
+    // 完整房间号里带着房主 peerId 就先记下；只给了 6 位短码时这里是空的，
+    // 等 game 状态到达后由 setupChannels 里的 onChange 补上（不依赖邀请链接）。
     hostUserId = fullId.indexOf('~') >= 0 ? fullId.split('~')[1] : '';
     isHost = false;
     shortCode = (fullId.split('~')[0].replace('escape-', '') || '').slice(0, 6);
@@ -312,7 +357,7 @@ export function createNet() {
 
   /** 房主专用：整套信令全挂时，自动换另一套（Nostr ↔ BitTorrent）重建房间。
    *  只在还没人进房时动手 —— 有人连上了就绝不换房间号。换完用 onFallback
-   *  通知 UI 重新展示房间号/邀请链接，队友要拿新链接。 */
+   *  通知 UI 重新展示房间号，队友要用同一个房间号加入。 */
   function maybeRelayFallback(err) {
     if (!isHost || fallbackDone || !room) return;
     if (err && err.code !== 'relay-failed') return;
@@ -349,18 +394,27 @@ export function createNet() {
   function sendInput(payload) {
     if (!actInput) return;
     if (isHost) { emit('onInput', payload, { userId: selfId }); return; }
-    actInput.send(payload, { target: hostUserId });
+    // 还没认出房主（刚用短码进房、房间状态还没到）就先广播：房主侧只认 isHost，
+    // 其他客人会直接忽略，多花一点带宽换「按键不丢」。
+    if (hostUserId) actInput.send(payload, { target: hostUserId });
+    else actInput.send(payload);
   }
 
   function sendEvent(evt) { if (actEvt && isHost) actEvt.send(evt); }
   function sendReveal(target, data) { if (actReveal && isHost) actReveal.send(data, { target }); }
 
   async function requestSync() {
-    if (!actSync || isHost || !hostUserId) return null;
-    try { return await actSync.request(null, { target: hostUserId, timeoutMs: 2500 }); }
-    catch (e) { return null; }
+    if (!actSync || isHost) return null;
+    try {
+      // 认出房主就定向问；还没认出就广播 —— 房主的 sync 通道会响应，返回值里带 hostUserId
+      const opts = { timeoutMs: 2500 };
+      if (hostUserId) opts.target = hostUserId;
+      return await actSync.request(null, opts);
+    } catch (e) { return null; }
   }
 
+  /** 生成带 ?room=&s=&u= 的完整链接。UI 已经改成只分享 6 位房间号，
+      这里保留给「旧链接 / 手动拼深链」的兼容场景（extractRoomId 仍能解析它）。 */
   function inviteUrl() {
     // 用当前页面的 origin + pathname 拼：部署到 GitHub Pages 就是
     // https://<用户名>.github.io/<仓库>/escape.html —— 不写死任何域名。
@@ -375,6 +429,9 @@ export function createNet() {
     room = null; profile = null; game = null;
     actInput = null; actEvt = null; actReveal = null; actSync = null;
     isHost = false; fullRoomId = ''; shortCode = '';
+    // hostUserId 必须一起清：它现在会在进房途中从 game 状态回填，
+    // 留着旧值会让下一次进房的输入先定向发给上一位房主。
+    hostUserId = '';
     // 大厅是按 getUsers() 画座位的：离开后必须再广播一次空名册，
     // 否则会一直挂着上一个房间的队友（emitUsers 在 room=null 时会早退，所以这里直接 emit）
     emit('onUsers', { count: 1, users: {}, profiles: {} });
@@ -400,7 +457,7 @@ export function createNet() {
 /** 单机调试：跳过 WebRTC，本地跑完整房主逻辑；空座位用「添加人机」补位 */
 export function createSoloNet() {
   const profiles = {
-    solo0: { color: '#ffffff', closed: false, closedRound: 0, spectateTo: null }
+    solo0: { name: '', color: '#ffffff', closed: false, closedRound: 0, spectateTo: null }
   };
   const users = {};
   const listeners = { onGame: [], onEvent: [], onReveal: [], onInput: [], onUsers: [], onStatus: [], onHostLost: [], onFallback: [] };
@@ -431,7 +488,9 @@ export function createSoloNet() {
     sendReveal(target, data) { emit('onReveal', data, { userId: 'solo0' }); },
     requestSync: async () => game,
     inviteUrl: () => location.href,
-    leave: async () => {},
+    // 离开必须把 created 清掉：fullRoomId / shortCode 都靠它，否则 solo 下「离开房间」
+    // 等于没反应（房间号还挂着），大厅里那排按钮也不会回到「创建 / 加入」状态。
+    leave: async () => { created = false; },
     emitUsers,
     // 单机也能自检网络：本机 UDP / TURN 通不通跟联不联机无关
     probeIce: (o) => probeIce(o),

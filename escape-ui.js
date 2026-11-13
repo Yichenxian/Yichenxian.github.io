@@ -15,7 +15,21 @@ export const ABILITY_INFO = {
 };
 
 const COLOR_KEY = 'escape_color';
+const NAME_KEY = 'escape_name';
 const TURN_KEY = 'escape_turn_on';
+const NAME_MAX = 8;
+
+/** 座位名会拼进 innerHTML，别人的名字属于不可信输入，必须转义 */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+/** 颜色同理：只接受 #rgb / #rrggbb(aa)，别的一律退回白色，免得拼进 style 里出事 */
+function safeColor(c) {
+  return /^#[0-9a-fA-F]{3,8}$/.test(c || '') ? c : '#ffffff';
+}
 
 /** 中继预设里「自定义」的哨兵值；其余 option 的 value 就是逗号分隔的 wss 列表 */
 const RELAY_CUSTOM = 'custom';
@@ -35,6 +49,7 @@ export function createUI() {
     btnResume: $('btnResume'), startTip: $('startTip'),
     btnCopyInvite: $('btnCopyInvite'), btnLeaveRoom: $('btnLeaveRoom'), btnStartGame: $('btnStartGame'),
     roomCode: $('roomCode'), roomInput: $('roomInput'), roster: $('roster'),
+    nameInput: $('nameInput'), nameInputLobby: $('nameInputLobby'),
     btnAddBot: $('btnAddBot'), btnRemoveBot: $('btnRemoveBot'),
     relayStrategy: $('relayStrategy'), relayPreset: $('relayPreset'), relayUrl: $('relayUrl'),
     lobbyStatus: $('lobbyStatus'),
@@ -90,6 +105,25 @@ export function createUI() {
   els.cpick.addEventListener('input', () => setColor(els.cpick.value, true));
   els.cpick.addEventListener('change', () => setColor(els.cpick.value, true));
   setColor(color, false);
+
+  /* 名字：开场页填一次，进房后还能在大厅改。两个输入框共用同一份状态，
+     只写「不是当前正在打字的那个」，否则光标会被打回开头。 */
+  let myName = '';
+  try { myName = String(localStorage.getItem(NAME_KEY) || '').slice(0, NAME_MAX); } catch (e) { myName = ''; }
+
+  function applyName(v, src) {
+    myName = String(v || '').trim().slice(0, NAME_MAX);
+    if (src !== 'start') els.nameInput.value = myName;
+    if (src !== 'lobby') els.nameInputLobby.value = myName;
+    try { localStorage.setItem(NAME_KEY, myName); } catch (e) {}
+  }
+  applyName(myName);
+  els.nameInput.addEventListener('input', () => applyName(els.nameInput.value, 'start'));
+  els.nameInputLobby.addEventListener('input', () => applyName(els.nameInputLobby.value, 'lobby'));
+  // 逐字上报会把 setProfile 打成每字一条广播，失焦 / 回车时才提交
+  const commitName = () => { if (handlers.onName) handlers.onName(myName); };
+  els.nameInput.addEventListener('change', commitName);
+  els.nameInputLobby.addEventListener('change', commitName);
 
   function bind(h) {
     handlers = h || {};
@@ -172,6 +206,9 @@ export function createUI() {
       ? (d.canStart ? '开始游戏' : '等待玩家 ' + d.userCount + ' / 4')
       : '等待房主开始';
     els.btnCopyInvite.hidden = !d.roomId;
+    // 「离开房间」只对真的在房间里的人有意义：刚进大厅还没建房/进房时它没有对象，
+    // 点了也只是把不存在的东西关掉，反而让人以为自己已经在房内。回首页走页面顶部「← 返回」。
+    els.btnLeaveRoom.hidden = !d.roomId;
     els.btnCreateRoom.hidden = !!d.roomId;
     els.btnJoinRoom.hidden = !!d.roomId;
     els.roomInput.hidden = !!d.roomId;
@@ -185,9 +222,12 @@ export function createUI() {
     for (let i = 0; i < 4; i++) {
       const u = d.users[i];
       if (!u) { html += '<div class="seat empty"><span class="dot"></span><span class="who">空位</span></div>'; continue; }
-      html += '<div class="seat' + (u.bot ? ' bot' : '') + '"><span class="dot" style="background:' + u.color + '"></span>' +
-        '<span class="who">' + (u.self ? '我' : u.short) + '</span>' +
-        '<span class="tag">' + (u.bot ? '人机' : (u.host ? '房主' : '玩家')) + '</span></div>';
+      // 名字是玩家自己填的，必须转义后再拼；颜色也要过一遍白名单
+      const who = u.self ? '我' : esc(u.short || '玩家');
+      const role = u.bot ? '人机' : (u.host ? '房主' : '玩家');
+      html += '<div class="seat' + (u.bot ? ' bot' : '') + '"><span class="dot" style="background:' + safeColor(u.color) + '"></span>' +
+        '<span class="who">' + who + '</span>' +
+        '<span class="tag">' + role + '</span></div>';
     }
     els.roster.innerHTML = html;
     if (d.status) setLobbyStatus(d.status);
@@ -296,12 +336,13 @@ export function createUI() {
   function getRoomInput() { return els.roomInput.value.trim(); }
   function setRoomInput(v) { els.roomInput.value = v; }
   function getColor() { return color; }
+  function getName() { return myName; }
 
   return {
     els, bind, showOnly, toast, setLobbyStatus, setBackRoom, renderLobby, renderAbility,
     setResume,
     renderHUD, renderButtons, showReview, setRelayUI, getRelayUI,
     setTurnOn, getTurnOn, setNetNote,
-    getRoomInput, setRoomInput, getColor, setColor
+    getRoomInput, setRoomInput, getColor, setColor, getName
   };
 }

@@ -118,15 +118,24 @@
     border-bottom: 1px dotted rgba(246, 248, 252, 0.35);
   }
 
-  /* 两个入口按钮：等宽、并排、同一套绿色胶囊样式 */
+  /* 三个入口按钮：等宽、并排、同一套胶囊样式 */
   .actions {
     display: flex;
     align-items: stretch;
     justify-content: center;
-    gap: 14px;
+    gap: 10px;
     margin-top: 1.6em;
   }
-  .actions .play-btn { flex: 1 1 0; min-width: 0; max-width: 220px; }
+  /* 三按钮同行：去掉 220px 上限，压缩内边距与字距 */
+  .actions .play-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+    padding: 12px 10px;
+    font-size: clamp(0.86rem, 2.8vw, 0.98rem);
+    letter-spacing: 0.02em;
+    text-indent: 0.02em;
+  }
 
   /* 绿色主按钮（<a> 与 <button> 共用） */
   .play-btn {
@@ -167,6 +176,22 @@
   .play-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; }
   .play-btn svg { width: 17px; height: 17px; display: block; flex: none; }
   .play-btn:disabled { opacity: 0.62; cursor: default; box-shadow: 0 8px 24px rgba(53, 224, 122, 0.2); }
+
+  /* 「进入逃生」：红底胶囊，与两个绿色按钮并排 */
+  .actions .escape-btn {
+    color: #fff5f5;
+    background: linear-gradient(180deg, #e03131, #a51825);
+    box-shadow: 0 8px 24px rgba(224, 49, 49, 0.34),
+                inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  }
+  .actions .escape-btn:not(:disabled):hover {
+    background: linear-gradient(180deg, #f04a4a, #bd1f2e);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(224, 49, 49, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.36);
+  }
+  .actions .escape-btn:focus-visible { outline: 2px solid #ff9b9b; outline-offset: 4px; }
+  .actions .escape-btn:disabled { opacity: 0.62; box-shadow: 0 8px 24px rgba(224, 49, 49, 0.2); }
 
   /* 次要按钮：描边玻璃胶囊（返回） */
   .ghost-btn {
@@ -331,18 +356,18 @@
     to   { opacity: 1; transform: translateY(0); }
   }
 
-  /* 窄屏：两个按钮仍然并排，缩小内边距保证不换行 */
+  /* 窄屏：三个按钮仍然并排，缩小内边距保证不换行 */
   @media (max-width: 420px) {
     .card { width: min(560px, 92vw); padding: 22px 18px; }
-    .actions { gap: 10px; }
+    .actions { gap: 6px; }
     .actions .play-btn {
-      padding: 12px 10px;
-      gap: 6px;
-      font-size: 0.92rem;
-      letter-spacing: 0.02em;
-      text-indent: 0.02em;
+      padding: 10px 4px;
+      gap: 4px;
+      font-size: 0.76rem;
+      letter-spacing: 0;
+      text-indent: 0;
     }
-    .actions .play-btn svg { width: 15px; height: 15px; }
+    .actions .play-btn svg { width: 12px; height: 12px; }
     .msg-footer .play-btn,
     .msg-footer .ghost-btn { min-width: 0; padding-left: 18px; padding-right: 18px; }
   }
@@ -380,6 +405,15 @@
               <path d="M7 7h2v2H7zM7 11h2v2H7zM7 15h2v2H7zM11 7h2v6h-2zM15 11h2v2h-2z"/>
             </svg>
             <span>去玩迷宫</span>
+          </a>
+          <!-- 进入逃生：四人联机合作逃生（红色主题页） -->
+          <a class="play-btn escape-btn" href="escape.html">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3.2 4.2 6.6v5.1c0 4.4 3.1 7.6 7.8 9.1 4.7-1.5 7.8-4.7 7.8-9.1V6.6z"/>
+              <path d="M9.4 12.1l1.9 1.9 3.6-3.9"/>
+            </svg>
+            <span>进入逃生</span>
           </a>
           <!-- 去写留言：在同一个透明框内切换到留言界面 -->
           <button class="play-btn" id="openMessage" type="button">

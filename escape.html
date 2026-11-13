@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>合作逃生 · 四人联机</title>
+<link rel="stylesheet" href="escape.css?v=20261113l">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="back" href="index.html">← 返回</a>
+  <span class="brand">合作逃生</span>
+</header>
+
+<div class="wrap" id="wrap">
+  <div class="app" id="app">
+
+    <!-- ===== 游戏画面：画面内只有 canvas 与三个全屏遮罩 ===== -->
+    <div class="stagewrap" id="stagewrap">
+      <!-- 返回房间：常驻音乐条右上，房主中途放弃本局用（全队一起回大厅，不必等结算） -->
+      <div class="toolbar" id="toolbar">
+        <button class="restart" id="btnBackRoomTop" type="button" disabled
+                title="放弃本局，全队一起回到房间">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14.6 8.2V5.9A1.9 1.9 0 0 0 12.7 4H6.2A1.9 1.9 0 0 0 4.3 5.9v12.2A1.9 1.9 0 0 0 6.2 20h6.5a1.9 1.9 0 0 0 1.9-1.9v-2.3"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M9.8 12h9.6m0 0-3.3-3.4M19.4 12l-3.3 3.4"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>返回房间</span>
+        </button>
+      </div>
+
+      <!-- 背景音乐条：与迷宫游戏共用 maze-music.js，id 必须齐全 -->
+      <div class="musicbar" id="musicbar">
+        <button class="mb-btn mb-play" id="mbPlay" type="button" aria-label="播放背景音乐">
+          <svg class="ico-play" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8.4 5.3v13.4L19 12z" fill="currentColor"/>
+          </svg>
+          <svg class="ico-pause" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="7.2" y="5.4" width="3.4" height="13.2" rx="1" fill="currentColor"/>
+            <rect x="13.4" y="5.4" width="3.4" height="13.2" rx="1" fill="currentColor"/>
+          </svg>
+        </button>
+        <button class="mb-badge" id="mb8bit" type="button" aria-pressed="true" title="切换 8BIT / 原声">8BIT</button>
+        <!-- 音效开关：与背景音乐音量互相独立，状态由 escape-sfx.js 接管 -->
+        <button class="mb-badge mb-sfx" id="mbSfx" type="button" aria-pressed="true"
+                title="音效开关（点一下切换，滚轮调音量；不影响背景音乐）">音效</button>
+        <span class="mb-title" id="mbTitle">Cool &amp; Powerful</span>
+        <span class="mb-eq" id="mbEq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span class="mb-gap"></span>
+        <button class="mb-btn" id="mbReset" type="button" aria-label="切回默认音乐" title="切回默认音乐" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M19 12a7 7 0 1 1-2.2-5.1" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+            <path d="M19.4 4.6v4.2h-4.2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button class="mb-btn mb-up" id="mbUpload" type="button" aria-label="上传音乐并转成 8bit" title="上传音乐 · 自动转 8bit">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 15.6V5.4m0 0L8.3 9.1M12 5.4l3.7 3.7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4.8 15.2v2.6a2 2 0 0 0 2 2h10.4a2 2 0 0 0 2-2v-2.6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+          </svg>
+          <span class="mb-ulabel">上传</span>
+        </button>
+        <input type="file" id="mbFile" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.aac,.opus" hidden>
+        <div class="mb-vol">
+          <button class="mb-btn mb-mute" id="mbMute" type="button" aria-label="音乐静音">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 9.4v5.2h3.3L12 18.6V5.4L7.3 9.4H4Z" fill="currentColor"/>
+              <path class="wave" d="M15.3 9.3a3.8 3.8 0 0 1 0 5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+              <path class="wave" d="M17.8 7a7.6 7.6 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+              <path class="cross" d="M16.6 9.2 21 13.6M21 9.2 16.6 13.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <input type="range" id="mbVol" min="0" max="100" step="1" value="48" aria-label="音乐音量">
+        </div>
+      </div>
+
+      <div class="stage" id="stage">
+        <canvas id="cv" width="720" height="720"></canvas>
+        <div class="toast" id="toast"></div>
+
+        <!-- 遮罩 1：开场 + 房间（两个子视图共用一个遮罩） -->
+        <div class="overlay show" id="ovStart">
+          <div class="ov-panel" id="startView">
+            <h1 class="ov-title">合作逃生</h1>
+            <p class="ov-sub">四人分头搜集钥匙，避开游荡的怪物，全员汇合终点。</p>
+            <button class="btn primary" id="btnStart" type="button">开始游戏</button>
+            <!-- 刷新后才知道自己刚才在哪个房间：客端按原 roomId 重进，房主复用短码重建 -->
+            <button class="btn ghost" id="btnResume" type="button" hidden>回到上次的房间</button>
+            <p class="ov-tip" id="startTip">4 人开局 · 房主为裁判 · 人数不够可在房间内添加人机</p>
+          </div>
+
+          <div class="ov-panel" id="lobbyView" hidden>
+            <h2 class="ov-title small">房间大厅</h2>
+            <div class="lobby-line">
+              <span class="lobby-label">房间号</span>
+              <strong class="lobby-code" id="roomCode">------</strong>
+              <button class="btn tiny" id="btnCopyInvite" type="button">复制邀请链接</button>
+            </div>
+            <div class="lobby-line">
+              <input class="field" id="roomInput" type="text" placeholder="粘贴完整房间号 / 邀请链接" autocomplete="off" spellcheck="false">
+              <button class="btn tiny" id="btnJoinRoom" type="button">加入</button>
+              <button class="btn tiny" id="btnCreateRoom" type="button">创建房间</button>
+            </div>
+            <div class="lobby-line relay-line">
+              <label class="lobby-label" for="relayStrategy">中继</label>
+              <select class="field slim" id="relayStrategy">
+                <option value="nostr">Nostr（默认）</option>
+                <option value="torrent">BitTorrent</option>
+              </select>
+              <!-- 预选：值是逗号分隔的 wss 列表，空值 = 用 trystero 内置池随机取 5 条。
+                   这批地址于 2026-11-13 实测可连且允许匿名写入（详见 escape-net.js 注释）。 -->
+              <select class="field slim" id="relayPreset" title="Nostr 中继预设">
+                <option value="">默认 · 内置随机 5 条</option>
+                <option value="wss://nostr.azzamo.net,wss://nostr.data.haus,wss://nostr.chaima.info,wss://nostr.hifish.org,wss://nostr.sathoarder.com">速度优先 · 5 条</option>
+                <option value="wss://bucket.coracle.social,wss://relay.angor.io,wss://nostr.overmind.lol,wss://relay.mostro.network,wss://relay.nostr.net">备用 · 5 条</option>
+                <option value="custom">自定义…</option>
+              </select>
+              <input class="field" id="relayUrl" type="text" placeholder="wss://中继1,wss://中继2" autocomplete="off" spellcheck="false" hidden>
+            </div>
+            <!-- 免费穿透增强：公共 TURN 只在直连打不通时才被 ICE 选中，不拖慢正常对局 -->
+            <div class="lobby-line turn-line">
+              <label class="turn-toggle" for="turnOn">
+                <input type="checkbox" id="turnOn" checked> 免费 TURN 中转
+              </label>
+              <button class="btn tiny" id="btnNetCheck" type="button">网络自检</button>
+            </div>
+            <p class="ov-tip net-note" id="netNote" hidden></p>
+            <div class="roster" id="roster"></div>
+            <div class="color-row">
+              <span class="lobby-label">我的颜色</span>
+              <span class="preview" id="colorPreview"></span>
+              <div class="swatches" id="swatches"></div>
+              <label class="picker"><span>自定义</span><input type="color" id="cpick" value="#ffffff"></label>
+            </div>
+            <div class="lobby-actions">
+              <button class="btn primary" id="btnStartGame" type="button" disabled>等待玩家 1 / 4</button>
+              <button class="btn ghost" id="btnLeaveRoom" type="button">离开房间</button>
+              <button class="btn tiny" id="btnAddBot" type="button" hidden>添加人机</button>
+              <button class="btn tiny" id="btnRemoveBot" type="button" hidden>移除人机</button>
+            </div>
+            <p class="ov-tip" id="lobbyStatus">创建房间并把邀请链接发给另外三位队友。</p>
+          </div>
+        </div>
+
+        <!-- 遮罩 2：能力提示 -->
+        <div class="overlay" id="ovAbility">
+          <div class="ov-panel">
+            <h2 class="ov-title small">你的能力</h2>
+            <div class="ability-card">
+              <strong class="ability-name" id="abilityName">--</strong>
+              <p class="ability-desc" id="abilityDesc">--</p>
+            </div>
+            <p class="ov-tip" id="abilityClosedCount">已确认 0 / 4</p>
+            <button class="btn primary" id="btnAbilityClose" type="button">关闭</button>
+          </div>
+        </div>
+
+        <!-- 遮罩 3：复盘 -->
+        <div class="overlay" id="ovReview">
+          <div class="ov-panel review-panel">
+            <h2 class="ov-title small" id="rvTitle">逃生成功</h2>
+
+            <section class="rv-sec">
+              <h3>耗时与阶段</h3>
+              <div class="rv-grid">
+                <span>总耗时</span><strong id="rvTotal">--</strong>
+                <span>集齐钥匙</span><strong id="rvKeys">--</strong>
+                <span>全员汇合</span><strong id="rvGather">--</strong>
+              </div>
+            </section>
+
+            <section class="rv-sec">
+              <h3>钥匙与假钥匙</h3>
+              <div class="rv-grid">
+                <span>真钥匙 / 假钥匙</span><strong id="rvKeyTotal">--</strong>
+                <span>全队误拾假钥匙</span><strong id="rvFakePicked">--</strong>
+              </div>
+              <div class="rv-table" id="rvPerPlayer"></div>
+            </section>
+
+            <section class="rv-sec">
+              <h3>血量与抢救</h3>
+              <div class="rv-grid">
+                <span>假钥匙掉血 / 怪物掉血</span><strong id="rvDmg">--</strong>
+                <span>抢救次数</span><strong id="rvRevive">--</strong>
+              </div>
+            </section>
+
+            <button class="btn primary" id="btnBackToRoom" type="button">回到房间</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- HUD：悬在画面下方、画面之外，不盖地形 -->
+      <div class="hud" id="hud">
+        <span class="hearts" id="hudHearts"><i class="heart"></i><i class="heart"></i><i class="heart"></i></span>
+        <span class="hud-item" id="hudKeys">真钥匙 0 / 0</span>
+        <span class="hud-item" id="hudAbility">能力 --</span>
+        <span class="hud-item" id="hudTimer">00:00</span>
+        <span class="hud-item" id="hudRoom">--</span>
+      </div>
+    </div>
+
+    <!-- ===== 画面外 UI：功能按钮 + 虚拟按钮 ===== -->
+    <div class="side" id="side">
+      <div class="action-row" id="actionRow">
+        <button class="btn small" id="btnWall" type="button" hidden title="先点这里，再按方向键穿一堵墙">穿墙 ×0</button>
+        <button class="btn small" id="btnRevive" type="button" hidden>抢救队友</button>
+        <button class="btn small" id="btnSpecPrev" type="button" hidden>◀ 上一位</button>
+        <button class="btn small" id="btnSpecNext" type="button" hidden>下一位 ▶</button>
+        <button class="btn ghost" id="btnKb" type="button"><span id="kbLabel">呼出虚拟按钮</span></button>
+      </div>
+
+      <div class="pad" id="pad">
+        <button data-dir="up" style="grid-area:u" type="button">W</button>
+        <button data-dir="left" style="grid-area:l" type="button">A</button>
+        <button data-dir="down" style="grid-area:d" type="button">S</button>
+        <button data-dir="right" style="grid-area:r" type="button">D</button>
+      </div>
+
+      <div class="foot" id="foot">WASD / 方向键移动 · 按住可连走 · 手机点「呼出虚拟按钮」</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 迷宫游戏音乐模块依赖的共享 AudioContext；本页不加载 maze.js，需要自己提供 -->
+<script>
+window.MazeAudio = (function () {
+  var ac = null;
+  function ensure() {
+    if (!ac) {
+      try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; }
+    }
+    if (ac && ac.state === 'suspended') { try { ac.resume(); } catch (e) {} }
+    return ac;
+  }
+  return { ensure: ensure, get ctx() { return ac; } };
+})();
+</script>
+<script src="bitcrush.js?v=20261113l"></script>
+<script src="maze-music.js?v=20261113l"></script>
+<script type="module" src="escape-main.js?v=20261113l"></script>
+</body>
+</html>

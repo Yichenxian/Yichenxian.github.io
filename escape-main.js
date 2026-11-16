@@ -121,6 +121,9 @@ let lastViewPos = null;      // 当前视角所在的格（死亡观战时是队
 let lastBeatAt = 0;          // 上一次心跳的时间戳
 let chaseHeard = false;      // 这轮追击是否已经响过「被盯上」的嘶鸣
 let bumpDir = null;          // 正顶着墙的方向；同方向按住不放只响一次撞墙声
+/** 最近一帧真正交给渲染层的能力标记。死后观战必须全部关掉，复活才恢复；
+ *  留个观测口是为了回归测试能直接验「生效时机」，而不是去猜画布像素。 */
+let lastAbilityFx = null;
 
 /* ---------------- 房主权威状态 ----------------
    规则本体（开局 / 扣血 / 判定结束 / 复盘数字）在 escape-authority.js，
@@ -633,6 +636,15 @@ function renderFrame(now) {
   const sight = computeSight(grid, vp.x, vp.y, FOG_SIGHT, FOG_PEEK);
   lastSight = sight;
   const cam = centerCam(vp.x, vp.y);
+  // 死后观战：视角借队友的眼睛，但能力是自己的，倒下期间一律不生效，
+  // 被抢救复活（alive 重新为 true）后才恢复。别把 myAbility() 直接塞进标记。
+  const abilityOn = !!(me && me.alive);
+  const ability = abilityOn ? myAbility() : 0;
+  const distinguish = ability === 2;
+  const keyBeacons = ability === 1;
+  const exitVision = ability === 3 && viewGame.exitActive;
+  const allyVision = ability === 4;
+  lastAbilityFx = { alive: abilityOn, viewId, distinguish, keyBeacons, exitVision, allyVision };
   const ids = Object.keys(viewGame.players);
   renderer.draw({
     grid, sight, mapHash: viewGame.mapHash,
@@ -644,12 +656,12 @@ function renderFrame(now) {
     }),
     keys: viewGame.keys.map((i, k) => ({ i, taken: !!viewGame.taken[k] })),
     fakeIds: revealedFakeIds,
-    distinguish: myAbility() === 2,
-    keyBeacons: myAbility() === 1,
-    exitVision: myAbility() === 3 && viewGame.exitActive,
+    distinguish,
+    keyBeacons,
+    exitVision,
     exitI: viewGame.exitI,
     monster: viewGame.monster,
-    allyVision: myAbility() === 4,
+    allyVision,
     now
   });
   lastViewPos = { x: vp.x, y: vp.y };
@@ -1325,6 +1337,7 @@ window.EscapeDebug = {
   get monster() { return viewGame.monster; },
   get mapHash() { return viewGame.mapHash; },
   get abilities() { return viewGame.abilities; },
+  get abilityFx() { return lastAbilityFx; },
   get game() { return viewGame; },
   get authority() { return A; },
   get selfId() { return selfId; },

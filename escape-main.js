@@ -4,7 +4,7 @@
    ============================================================ */
 
 import {
-  N, idx, inBounds, CFG, unpackGrid, hashGrid
+  N, idx, inBounds, CFG, unpackGrid, hashGrid, setMapSize
 } from './escape-map.js?v=20261122a';
 import { computeSight, centerCam, FOG_SIGHT, FOG_PEEK } from './escape-fog.js?v=20261122a';
 import { tickMonster, publicMonster } from './escape-ai.js?v=20261122a';
@@ -224,6 +224,8 @@ function ensureGrid(v) {
   if (!v.mapB64) { grid = null; mapHash = ''; return; }
   if (net.isHost && A.grid) { grid = A.grid; mapHash = v.mapHash; return; }
   if (grid && v.mapHash === mapHash) return;
+  // 客户端必须先把 N 切到房主广播的尺寸，否则 unpackGrid 会用默认 51 解出乱图
+  setMapSize(v.size || 51);
   const g = unpackGrid(v.mapB64);
   if (hashGrid(g) !== v.mapHash) {
     ui.toast('地图校验失败，正在重新同步');
@@ -1317,7 +1319,7 @@ ui.bind({
   onResume: resumeRoom,
   onAddBot: addBot,
   onRemoveBot: removeBot,
-  onStartGame: auth.startGame,
+  onStartGame: () => auth.startGame(ui.getMapSize()),
   // 网络自检：本地收集一次 ICE 候选，判断这台机器能不能穿过当前网络
   onNetCheck: async () => {
     if (netCheckBusy) return;

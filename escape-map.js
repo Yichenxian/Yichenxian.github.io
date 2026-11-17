@@ -1,12 +1,21 @@
 /* ============================================================
    合作逃生 · 地图生成与网格工具（纯函数，无 DOM 依赖）
-   逻辑网格 51×51（奇数），界面文案称「50×50」
+   逻辑网格奇数边长（默认 51），界面文案按 MAP_SIZES 档位显示
    递归回溯 / Growing Tree 完美迷宫 → 死胡同钥匙房 → Braid 环路
    → 最远点采样出生 → minimax 终点 → 终点附近怪物 → BFS 校验
    ============================================================ */
 
-export const N = 51;
-export const TOTAL = N * N;
+export let N = 51;
+export let TOTAL = N * N;
+
+/** 运行时切换地图尺寸。N / TOTAL 是 live binding，各模块运行时读取都会跟着变。
+ *  档位与界面文案：50×50 → 51（奇数）、75×75 → 75、100×100 → 101。 */
+export function setMapSize(n) {
+  n = (n | 0) || 51;
+  if ((n & 1) === 0) n += 1;   // 递归回溯从 (1,1) 按 2 步长铺，边长必须奇数
+  N = n;
+  TOTAL = n * n;
+}
 
 export const CFG = {
   BRANCH_P: 0.72,          // Growing Tree 取栈顶的概率
@@ -21,7 +30,7 @@ export const CFG = {
   KEY_MIN_SPAWN: 8,        // 钥匙房离出生点最小路径距离
   SPAWN_MIN_GAP: 12,       // 四出生点两两最小路径距离
   EXIT_MIN_DIST: 22,       // 终点离最近出生点的最小路径距离（开局摸不到）
-  EXIT_KEY_MAX: 35,        // 终点到最远真钥匙的最大路径距离（51×70%）
+  EXIT_KEY_MAX: 35,        // 终点到最远真钥匙的最大路径距离（按 N 动态缩放，见 generateMap）
   MONSTER_HOME_R: 6,       // 怪物游荡环带半径
   MONSTER_MIN_SPAWN: 16,   // 怪物离出生点最小路径距离
   HP_MAX: 3,
@@ -332,7 +341,8 @@ export function generateMap(seed) {
 
     const minSpawnDist = attempt < 15 ? CFG.EXIT_MIN_DIST : (attempt < 25 ? 18 : 15);
     const ex = pickExit(grid, keyRooms, spawnMin, minSpawnDist);
-    if (ex.exitI < 0 || ex.worstKey > CFG.EXIT_KEY_MAX) continue;
+    // 终点到最远真钥匙的距离上限随边长缩放（51 时约 35，100 时约 71）
+    if (ex.exitI < 0 || ex.worstKey > Math.max(CFG.EXIT_KEY_MAX, Math.round(N * 0.7))) continue;
 
     // 钥匙 / 终点在 braid 之后仍可达
     const reach = bfsDistances(grid, spawns[0]);

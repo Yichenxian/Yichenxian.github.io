@@ -1,6 +1,6 @@
 @echo off
 title Co-op Escape - Local Preview
-cd /d "C:\AI\web-game\index"
+cd /d "C:\AI\web-game"
 
 set PORT=8130
 set URL=http://127.0.0.1:%PORT%/escape.html
@@ -30,7 +30,7 @@ exit /b 1
 echo Python : %PYCMD%
 echo URL    : %URL%
 echo.
-echo Serving folder: C:\AI\web-game\index
+echo Serving folder: C:\AI\web-game
 echo Starting server. Keep this window open.
 echo Browser opens shortly. Close this window to stop.
 echo.

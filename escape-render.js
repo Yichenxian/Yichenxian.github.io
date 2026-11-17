@@ -12,7 +12,7 @@
    ============================================================ */
 
 import { N, idx, xOf, yOf } from './escape-map.js?v=20261122a';
-import { VIEW, MAP_PAD, projectEdge, buildVisionMask, fogTargets, approachFog, FOG_FADE_MS }
+import { VIEW, projectEdge, buildVisionMask, fogTargets, approachFog, FOG_FADE_MS }
   from './escape-fog.js?v=20261122a';
 
 export const COLORS = {
@@ -80,6 +80,7 @@ export function createRenderer(canvas) {
   const fogImg = fogLowCtx.createImageData(VIEW, VIEW);
 
   let cell = 24, s = 360, dpr = 1, mapKey = '';
+  let mapCamX = -999, mapCamY = -999;   // 视窗底图当前对准的相机格（变了才重画）
   let shx = 0, shy = 0, st = null;
   const visionMask = buildVisionMask();
   const fogAlpha = new Float32Array(VIEW * VIEW).fill(1);
@@ -95,120 +96,147 @@ export function createRenderer(canvas) {
     fogCanvas.width = Math.round(s * dpr);
     fogCanvas.height = Math.round(s * dpr);
     fogCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const ms = Math.ceil((N + MAP_PAD * 2) * cell);
-    mapCanvas.width = Math.round(ms * dpr);
-    mapCanvas.height = Math.round(ms * dpr);
-    mapKey = '';
+    // 底图只开「当前视窗 + 四周各一格」那么大：100×100 的大图若整图离屏预画会爆到几百 MB
+    // +2 格是墙脚阴影 / 南向描边要渗进相邻格，边缘那圈只作缓冲不直接显示
+    mapCanvas.width = Math.round((VIEW + 2) * cell * dpr);
+    mapCanvas.height = Math.round((VIEW + 2) * cell * dpr);
+    mapKey = ''; mapCamX = -999; mapCamY = -999;
     fogAlpha.fill(1); fogAt = 0; fogMapKey = '';
   }
 
-  /* ---------------- 底图 ---------------- */
-  function paintMap(grid) {
+  /* ---------------- 底图（按视窗绘制，不整图离屏） ----------------
+     100×100 的大图若整图离屏预画会到几百 MB，这里只画当前 VIEW×VIEW 视窗，
+     四周各扩一格 —— 墙的描边要看邻格、南向接触阴影要压进下面那一格。 */
+  function paintMap(grid, camX, camY) {
     const ms = mapCanvas.width / dpr;
-    const off = MAP_PAD * cell;
+    const W = VIEW + 2;
+    const x0 = camX - 1, y0 = camY - 1;
     mapCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     mapCtx.clearRect(0, 0, ms, ms);
     mapCtx.fillStyle = '#05010a';
     mapCtx.fillRect(0, 0, ms, ms);
 
-    const wall = i => (i >= 0 && i < N * N) ? !!grid[i] : false;
+    const wall = (gx, gy) => (gx >= 0 && gx < N && gy >= 0 && gy < N) ? !!grid[gy * N + gx] : false;
+    const cellX = wx => wx * cell;
+    const cellY = wy => wy * cell;
+    const inMap = (gx, gy) => gx >= 0 && gx < N && gy >= 0 && gy < N;
 
     // ---- 地面 ----
-    for (let i = 0; i < N * N; i++) {
-      if (grid[i]) continue;
-      const x = off + xOf(i) * cell, y = off + yOf(i) * cell;
-      const h = hash01(i);
-      mapCtx.fillStyle = h > 0.5 ? COLORS.FLOOR_A : COLORS.FLOOR_B;
-      mapCtx.fillRect(x, y, cell + 0.7, cell + 0.7);
-      // 石板内凹：上/左暗边 + 下/右亮边，一格就有厚度感
-      mapCtx.strokeStyle = 'rgba(0,0,0,.22)';
-      mapCtx.lineWidth = Math.max(1, cell * 0.035);
-      mapCtx.beginPath();
-      mapCtx.moveTo(x + 0.5, y + cell - 0.5);
-      mapCtx.lineTo(x + 0.5, y + 0.5);
-      mapCtx.lineTo(x + cell - 0.5, y + 0.5);
-      mapCtx.stroke();
-      mapCtx.strokeStyle = 'rgba(255,255,255,.035)';
-      mapCtx.beginPath();
-      mapCtx.moveTo(x + cell - 0.5, y + 0.5);
-      mapCtx.lineTo(x + cell - 0.5, y + cell - 0.5);
-      mapCtx.lineTo(x + 0.5, y + cell - 0.5);
-      mapCtx.stroke();
-      // 石屑
-      if (h > 0.8) {
-        const h2 = hash01(i + 7777);
-        mapCtx.fillStyle = 'rgba(255,255,255,.055)';
-        mapCtx.fillRect(x + cell * (0.18 + h * 0.55), y + cell * (0.18 + h2 * 0.55),
-          Math.max(1, cell * 0.075), Math.max(1, cell * 0.075));
-      }
-      if (h < 0.12) {
-        mapCtx.fillStyle = 'rgba(0,0,0,.20)';
-        mapCtx.fillRect(x + cell * (0.2 + h * 3), y + cell * 0.62, Math.max(1, cell * 0.2), Math.max(1, cell * 0.05));
+    for (let wy = 0; wy < W; wy++) {
+      for (let wx = 0; wx < W; wx++) {
+        const gx = x0 + wx, gy = y0 + wy;
+        if (!inMap(gx, gy)) continue;
+        const i = gy * N + gx;
+        if (grid[i]) continue;
+        const x = cellX(wx), y = cellY(wy);
+        const h = hash01(i);
+        mapCtx.fillStyle = h > 0.5 ? COLORS.FLOOR_A : COLORS.FLOOR_B;
+        mapCtx.fillRect(x, y, cell + 0.7, cell + 0.7);
+        // 石板内凹：上/左暗边 + 下/右亮边，一格就有厚度感
+        mapCtx.strokeStyle = 'rgba(0,0,0,.22)';
+        mapCtx.lineWidth = Math.max(1, cell * 0.035);
+        mapCtx.beginPath();
+        mapCtx.moveTo(x + 0.5, y + cell - 0.5);
+        mapCtx.lineTo(x + 0.5, y + 0.5);
+        mapCtx.lineTo(x + cell - 0.5, y + 0.5);
+        mapCtx.stroke();
+        mapCtx.strokeStyle = 'rgba(255,255,255,.035)';
+        mapCtx.beginPath();
+        mapCtx.moveTo(x + cell - 0.5, y + 0.5);
+        mapCtx.lineTo(x + cell - 0.5, y + cell - 0.5);
+        mapCtx.lineTo(x + 0.5, y + cell - 0.5);
+        mapCtx.stroke();
+        // 石屑
+        if (h > 0.8) {
+          const h2 = hash01(i + 7777);
+          mapCtx.fillStyle = 'rgba(255,255,255,.055)';
+          mapCtx.fillRect(x + cell * (0.18 + h * 0.55), y + cell * (0.18 + h2 * 0.55),
+            Math.max(1, cell * 0.075), Math.max(1, cell * 0.075));
+        }
+        if (h < 0.12) {
+          mapCtx.fillStyle = 'rgba(0,0,0,.20)';
+          mapCtx.fillRect(x + cell * (0.2 + h * 3), y + cell * 0.62, Math.max(1, cell * 0.2), Math.max(1, cell * 0.05));
+        }
       }
     }
 
     // ---- 墙体：整块砌体，只有真正露在外面的顶面才画亮面 ----
-    for (let i = 0; i < N * N; i++) {
-      if (!grid[i]) continue;
-      const x = off + xOf(i) * cell, y = off + yOf(i) * cell;
-      const openTop = !wall(i - N);
-      const g = mapCtx.createLinearGradient(0, y, 0, y + cell);
-      g.addColorStop(0, openTop ? COLORS.WALL_TOP : COLORS.WALL_MID);
-      g.addColorStop(openTop ? 0.26 : 0.0, COLORS.WALL_MID);
-      g.addColorStop(1, COLORS.WALL_LOW);
-      mapCtx.fillStyle = g;
-      mapCtx.fillRect(x, y, cell + 0.7, cell + 0.7);
+    for (let wy = 0; wy < W; wy++) {
+      for (let wx = 0; wx < W; wx++) {
+        const gx = x0 + wx, gy = y0 + wy;
+        if (!inMap(gx, gy)) continue;
+        const i = gy * N + gx;
+        if (!grid[i]) continue;
+        const x = cellX(wx), y = cellY(wy);
+        const openTop = !wall(gx, gy - 1);
+        const g = mapCtx.createLinearGradient(0, y, 0, y + cell);
+        g.addColorStop(0, openTop ? COLORS.WALL_TOP : COLORS.WALL_MID);
+        g.addColorStop(openTop ? 0.26 : 0.0, COLORS.WALL_MID);
+        g.addColorStop(1, COLORS.WALL_LOW);
+        mapCtx.fillStyle = g;
+        mapCtx.fillRect(x, y, cell + 0.7, cell + 0.7);
 
-      // 顶面高光：只在没有墙压着的那一侧，整片墙才有连续的脊线
-      if (openTop) {
-        mapCtx.fillStyle = COLORS.WALL_HI;
-        mapCtx.fillRect(x, y + cell * 0.02, cell + 0.7, cell * 0.075);
+        // 顶面高光：只在没有墙压着的那一侧，整片墙才有连续的脊线
+        if (openTop) {
+          mapCtx.fillStyle = COLORS.WALL_HI;
+          mapCtx.fillRect(x, y + cell * 0.02, cell + 0.7, cell * 0.075);
+        }
+
+        // 砖缝：只画在顶面之下的主体区，按格错位
+        const h = hash01(i);
+        const top = y + cell * (openTop ? 0.3 : 0.08);
+        mapCtx.strokeStyle = COLORS.MORTAR;
+        mapCtx.lineWidth = Math.max(1, cell * 0.035);
+        mapCtx.beginPath();
+        const mid = y + cell * 0.62;
+        mapCtx.moveTo(x, mid); mapCtx.lineTo(x + cell, mid);
+        const sx0 = x + cell * (h > 0.5 ? 0.32 : 0.68);
+        mapCtx.moveTo(sx0, top); mapCtx.lineTo(sx0, mid);
+        const sx1 = x + cell * (h > 0.5 ? 0.72 : 0.28);
+        mapCtx.moveTo(sx1, mid); mapCtx.lineTo(sx1, y + cell);
+        mapCtx.stroke();
       }
-
-      // 砖缝：只画在顶面之下的主体区，按格错位
-      const h = hash01(i);
-      const top = y + cell * (openTop ? 0.3 : 0.08);
-      mapCtx.strokeStyle = COLORS.MORTAR;
-      mapCtx.lineWidth = Math.max(1, cell * 0.035);
-      mapCtx.beginPath();
-      const mid = y + cell * 0.62;
-      mapCtx.moveTo(x, mid); mapCtx.lineTo(x + cell, mid);
-      const sx0 = x + cell * (h > 0.5 ? 0.32 : 0.68);
-      mapCtx.moveTo(sx0, top); mapCtx.lineTo(sx0, mid);
-      const sx1 = x + cell * (h > 0.5 ? 0.72 : 0.28);
-      mapCtx.moveTo(sx1, mid); mapCtx.lineTo(sx1, y + cell);
-      mapCtx.stroke();
     }
 
     // ---- 边缘：墙与地面交界处描暖色轮廓线 + 地面接触阴影 ----
-    for (let i = 0; i < N * N; i++) {
-      if (!grid[i]) continue;
-      const x = off + xOf(i) * cell, y = off + yOf(i) * cell;
-      // 南侧（画面下方）是玩家视线主要接触的面，给最亮的边
-      if (!wall(i + N)) {
-        mapCtx.fillStyle = COLORS.RIM;
-        mapCtx.globalAlpha = 0.5;
-        mapCtx.fillRect(x, y + cell - Math.max(1, cell * 0.045), cell + 0.7, Math.max(1, cell * 0.045));
-        mapCtx.globalAlpha = 1;
-        const sg = mapCtx.createLinearGradient(0, y + cell, 0, y + cell * 1.5);
-        sg.addColorStop(0, 'rgba(0,0,0,.5)');
-        sg.addColorStop(1, 'rgba(0,0,0,0)');
-        mapCtx.fillStyle = sg;
-        mapCtx.fillRect(x, y + cell, cell + 0.7, cell * 0.5);
+    for (let wy = 0; wy < W; wy++) {
+      for (let wx = 0; wx < W; wx++) {
+        const gx = x0 + wx, gy = y0 + wy;
+        if (!inMap(gx, gy)) continue;
+        const i = gy * N + gx;
+        if (!grid[i]) continue;
+        const x = cellX(wx), y = cellY(wy);
+        // 南侧（画面下方）是玩家视线主要接触的面，给最亮的边
+        if (!wall(gx, gy + 1)) {
+          mapCtx.fillStyle = COLORS.RIM;
+          mapCtx.globalAlpha = 0.5;
+          mapCtx.fillRect(x, y + cell - Math.max(1, cell * 0.045), cell + 0.7, Math.max(1, cell * 0.045));
+          mapCtx.globalAlpha = 1;
+          const sg = mapCtx.createLinearGradient(0, y + cell, 0, y + cell * 1.5);
+          sg.addColorStop(0, 'rgba(0,0,0,.5)');
+          sg.addColorStop(1, 'rgba(0,0,0,0)');
+          mapCtx.fillStyle = sg;
+          mapCtx.fillRect(x, y + cell, cell + 0.7, cell * 0.5);
+        }
+        if (!wall(gx, gy - 1)) { mapCtx.fillStyle = 'rgba(255,190,180,.10)'; mapCtx.fillRect(x, y, cell + 0.7, Math.max(1, cell * 0.04)); }
+        if (!wall(gx - 1, gy)) { mapCtx.fillStyle = 'rgba(0,0,0,.30)'; mapCtx.fillRect(x, y, Math.max(1, cell * 0.05), cell + 0.7); }
+        if (!wall(gx + 1, gy)) { mapCtx.fillStyle = 'rgba(255,180,170,.07)'; mapCtx.fillRect(x + cell - Math.max(1, cell * 0.04), y, Math.max(1, cell * 0.04), cell + 0.7); }
       }
-      if (!wall(i - N)) { mapCtx.fillStyle = 'rgba(255,190,180,.10)'; mapCtx.fillRect(x, y, cell + 0.7, Math.max(1, cell * 0.04)); }
-      if (!wall(i - 1)) { mapCtx.fillStyle = 'rgba(0,0,0,.30)'; mapCtx.fillRect(x, y, Math.max(1, cell * 0.05), cell + 0.7); }
-      if (!wall(i + 1)) { mapCtx.fillStyle = 'rgba(255,180,170,.07)'; mapCtx.fillRect(x + cell - Math.max(1, cell * 0.04), y, Math.max(1, cell * 0.04), cell + 0.7); }
     }
 
     // ---- 墙脚接触阴影（往南压一格） ----
-    for (let i = 0; i < N * N; i++) {
-      if (!grid[i] || wall(i + N)) continue;
-      const sg = mapCtx.createLinearGradient(0, off + yOf(i) * cell + cell, 0, off + yOf(i) * cell + cell * 1.55);
-      sg.addColorStop(0, 'rgba(0,0,0,.45)');
-      sg.addColorStop(1, 'rgba(0,0,0,0)');
-      mapCtx.fillStyle = sg;
-      mapCtx.fillRect(off + xOf(i) * cell, off + yOf(i) * cell + cell, cell + 0.7, cell * 0.55);
+    for (let wy = 0; wy < W; wy++) {
+      for (let wx = 0; wx < W; wx++) {
+        const gx = x0 + wx, gy = y0 + wy;
+        if (!inMap(gx, gy)) continue;
+        const i = gy * N + gx;
+        if (!grid[i] || wall(gx, gy + 1)) continue;
+        const sg = mapCtx.createLinearGradient(0, cellY(wy) + cell, 0, cellY(wy) + cell * 1.55);
+        sg.addColorStop(0, 'rgba(0,0,0,.45)');
+        sg.addColorStop(1, 'rgba(0,0,0,0)');
+        mapCtx.fillStyle = sg;
+        mapCtx.fillRect(cellX(wx), cellY(wy) + cell, cell + 0.7, cell * 0.55);
+      }
     }
   }
 
@@ -513,7 +541,10 @@ export function createRenderer(canvas) {
     st = data;
     shx = data.ox || 0; shy = data.oy || 0;
     if (!data.grid || !data.sight) return;
-    if (mapKey !== data.mapHash) { paintMap(data.grid); mapKey = data.mapHash; }
+    if (mapKey !== data.mapHash || mapCamX !== data.camX || mapCamY !== data.camY) {
+      paintMap(data.grid, data.camX, data.camY);
+      mapKey = data.mapHash; mapCamX = data.camX; mapCamY = data.camY;
+    }
     if (fogMapKey !== data.mapHash) { fogAlpha.fill(1); fogAt = 0; fogMapKey = data.mapHash; }
     // 上一帧刚点亮、这一帧才淡出的格子也走记忆层：否则换图的那一帧会整屏"闪白"
 
@@ -525,9 +556,9 @@ export function createRenderer(canvas) {
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, s, s);
+    // 底图四周各留了 1 格缓冲，实际显示区从 (cell, cell) 起、宽高 VIEW*cell = s
     ctx.drawImage(mapCanvas,
-      (data.camX + MAP_PAD) * cell * dpr, (data.camY + MAP_PAD) * cell * dpr,
-      VIEW * cell * dpr, VIEW * cell * dpr, shx, shy, s, s);
+      cell * dpr, cell * dpr, s * dpr, s * dpr, shx, shy, s, s);
 
     const pulse = 0.5 + 0.5 * Math.sin(data.now / 260);
     const lit = data.sight.lit;

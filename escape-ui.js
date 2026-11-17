@@ -49,7 +49,7 @@ export function createUI() {
     btnResume: $('btnResume'), startTip: $('startTip'),
     btnCopyInvite: $('btnCopyInvite'), btnLeaveRoom: $('btnLeaveRoom'), btnStartGame: $('btnStartGame'),
     roomCode: $('roomCode'), roomInput: $('roomInput'), roster: $('roster'),
-    roomHero: $('roomHero'), rosterCount: $('rosterCount'),
+    roomHero: $('roomHero'), rosterCount: $('rosterCount'), mapSizeLine: $('mapSizeLine'), mapSize: $('mapSize'),
     nameInput: $('nameInput'), nameInputLobby: $('nameInputLobby'),
     btnAddBot: $('btnAddBot'), btnRemoveBot: $('btnRemoveBot'),
     relayStrategy: $('relayStrategy'), relayPreset: $('relayPreset'), relayUrl: $('relayUrl'),
@@ -214,6 +214,8 @@ export function createUI() {
     els.btnCopyInvite.hidden = !d.roomId;
     // 没进房时房号只是占位，整条压暗，别让「------」抢走注意力
     if (els.roomHero) els.roomHero.classList.toggle('idle', !d.roomId);
+    // 地图大小只给房主看（客人照房主的选择玩，不用自己选）
+    if (els.mapSizeLine) els.mapSizeLine.hidden = !d.isHost;
     // 「离开房间」只对真的在房间里的人有意义：刚进大厅还没建房/进房时它没有对象，
     // 点了也只是把不存在的东西关掉，反而让人以为自己已经在房内。回首页走页面顶部「← 返回」。
     els.btnLeaveRoom.hidden = !d.roomId;
@@ -474,6 +476,7 @@ export function createUI() {
     els.netNote.hidden = !text;
     els.netNote.className = 'ov-tip net-note' + (tone ? ' ' + tone : '');
   }
+  function getMapSize() { return parseInt(els.mapSize.value, 10) || 51; }
   function getRoomInput() { return els.roomInput.value.trim(); }
   function setRoomInput(v) { els.roomInput.value = v; }
   function getColor() { return color; }
@@ -484,6 +487,6 @@ export function createUI() {
     setResume,
     renderHUD, renderButtons, showReview, setRelayUI, getRelayUI,
     setTurnOn, getTurnOn, setNetNote,
-    getRoomInput, setRoomInput, getColor, setColor, getName
+    getRoomInput, setRoomInput, getColor, setColor, getName, getMapSize
   };
 }

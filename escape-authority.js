@@ -6,7 +6,7 @@
    ============================================================ */
 
 import {
-  idx, CFG, makeRng, shuffle, generateMap, publicMapInfo
+  idx, CFG, makeRng, shuffle, generateMap, publicMapInfo, setMapSize
 } from './escape-map.js?v=20261122a';
 import { createMonster } from './escape-ai.js?v=20261122a';
 import { createBot } from './escape-bot.js?v=20261122a';
@@ -55,11 +55,14 @@ export function createAuthority(fx) {
     };
   }
 
-  function startGame() {
+  function startGame(mapSize) {
     if (!fx.isHost() || !fx.joined() || !fx.selfId()) return;
     const ids = fx.userIds();
     if (ids.length !== 4) { fx.toast('必须满 4 人才能开始（可添加人机补位）'); return; }
 
+    // 先按房主选的地图尺寸切好网格边长，再生成 —— N/TOTAL 是 live binding，
+    // 客户端收到广播 size 后同样 setMapSize 才能正确解包 mapB64
+    setMapSize(mapSize || 51);
     const seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
     // 生成失败必须拦在这里：resetA() 之后抛错会留下「半个房间」，
     // 界面停在 abilities 但地图/玩家全空，全队只能刷新重来。

@@ -1,0 +1,1160 @@
+/* ============================================================
+   合作逃生 · 四人联机  —  样式
+   红色基色；UI 全部在画面下方，画面内只有 canvas 与遮罩
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  --accent: #e03131;
+  --accent-2: #ff6b6b;
+  --accent-rgb: 224, 49, 49;
+  --text: #fbe9ec;
+  --muted: #c99aa2;
+  --focus: #ff9b9b;
+  --wall: #8f1d2c;
+  --floor: #39424c;
+  /* HUD 预留高度：一行 32 + 与侧栏 6px 间隙。窄屏 HUD 折两行时 fit() 会改写它，
+     侧栏用 margin-top 让位（margin 不进 side.offsetHeight，不会连带缩小画面）。 */
+  --hud-reserve: 38px;
+}
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(1200px 620px at 50% -12%, #3a0d14 0%, #1a070b 46%, #0a0406 100%);
+  background-color: #0a0406;
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+  overflow: hidden;
+}
+
+/* ===== 顶部栏 ===== */
+.topbar {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top))
+           max(14px, env(safe-area-inset-right))
+           2px
+           max(14px, env(safe-area-inset-left));
+}
+.back {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 15px 7px 11px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: #ffc8ce;
+  text-decoration: none;
+  background: rgba(224, 49, 49, .1);
+  border: 1px solid rgba(224, 49, 49, .34);
+  border-radius: 999px;
+}
+.back:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.brand { font-size: 15px; font-weight: 800; letter-spacing: .14em; color: #ffd9de; }
+
+/* ===== 布局骨架 ===== */
+.wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px calc(4px + env(safe-area-inset-bottom));
+}
+.app { display: flex; flex-direction: column; align-items: center; gap: 0; }
+body.landscape .app { flex-direction: row; align-items: center; gap: 16px; }
+/* 横屏时侧栏在右边、画面下方没有流内元素，HUD（绝对定位）会被居中的布局挤出视口底。
+   用 stagewrap 的 margin-bottom 把这一行算进「应用高度」，居中时才真的给它留位置。
+   不用 .app 的 padding-bottom：那是 sizePad() 在键盘超高时写内联上推量的同一个属性。 */
+body.landscape .stagewrap { margin-bottom: var(--hud-reserve); }
+
+.stagewrap { position: relative; flex: none; display: flex; flex-direction: column; gap: 8px; }
+/* 初值（JS 未跑时）就留出 .wrap 的左右 padding，避免首帧画面贴边 */
+.stage {
+  position: relative;
+  width: min(calc(100vw - 26px), 560px);
+  height: min(calc(100vw - 26px), 560px);
+  overflow: hidden;
+  border-radius: 14px;
+  background: #0a0406;
+  border: 1px solid rgba(224, 49, 49, .28);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .03);
+}
+canvas#cv { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+
+/* HUD：悬在画面下方、画面之外，不占 flex 流、不盖地形。
+   宽度恒等于画面宽（left/right:0 相对 .stagewrap），窄屏放不下一行时
+   折成两行（flex-wrap），此时高度由内容撑开，侧栏靠 body 上的
+   --hud-reserve 往下让位；行内文字各自 nowrap，不从词组中间断开。 */
+.hud {
+  position: absolute;
+  left: 0; right: 0;
+  top: 100%;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 2px 4px 3px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--text);
+}
+.hud.show { display: flex; }
+.hud.inside { top: auto; bottom: 0; }
+/* 每项都不可压缩：宁可折行也不能被 flex-shrink 压窄，
+   否则 nowrap 的文字会溢出自己的盒子、跟相邻项叠在一起。 */
+.hud > * { flex: 0 0 auto; max-width: 100%; }
+.hud-row {
+  display: flex; align-items: center; justify-content: center;
+  flex-wrap: wrap; column-gap: 9px; row-gap: 1px;
+  min-height: 24px;
+}
+.hud-row > * { flex: 0 0 auto; }
+.hud-item { color: #e9b9c0; white-space: nowrap; }
+.hud-item b { color: #ffd45a; font-size: 13.5px; letter-spacing: .04em; }
+.hud-ability { color: #ffd9de; }
+.hud-timer { color: #fff0f2; font-variant-numeric: tabular-nums; letter-spacing: .06em; }
+.hud-room { color: #8e6a72; font-size: 11px; letter-spacing: .16em; }
+.hud-room::before { content: 'ROOM '; letter-spacing: .1em; opacity: .7; }
+.hud-sep { width: 1px; height: 11px; background: rgba(224, 49, 49, .35); }
+/* 队友状态条：一排放得下 4 个人，每个人 = 色点 + 名字 + 血量刻度 */
+.hud-team { display: flex; align-items: center; justify-content: center; gap: 5px; flex-wrap: wrap; }
+.hud-team:empty { display: none; }
+.hud-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px 2px 5px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+  color: #e0c3c9;
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.hud-chip .c-dot { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 6px currentColor; }
+.hud-chip .c-keys { font-size: 9.5px; color: #ffd45a; }
+.hud-chip.me { border-color: rgba(224, 49, 49, .6); background: rgba(224, 49, 49, .16); color: #fff2f4; }
+.hud-chip.down { opacity: .42; text-decoration: line-through; }
+.hud-chip.down .c-keys { display: none; }
+.hearts { display: inline-flex; gap: 3px; }
+.heart {
+  width: 13px; height: 13px;
+  background: #ff4d5e;
+  clip-path: polygon(50% 100%, 0 42%, 0 18%, 20% 0, 50% 22%, 80% 0, 100% 18%, 100% 42%);
+  box-shadow: 0 0 8px rgba(255, 77, 94, .5);
+}
+.heart.off { background: #4a2a30; box-shadow: none; }
+.hearts.live { animation: heartBeat .9s ease-in-out infinite; }
+@keyframes heartBeat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+
+/* 侧栏：所有 UI 都在画面外 */
+.side {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  width: min(calc(100vw - 26px), 560px);
+}
+body:not(.landscape) .side { margin-top: var(--hud-reserve); }
+body.landscape .side { width: min(34vw, 260px); }
+
+/* ===== 工具条（音乐条右上方：房主中途返回房间） ===== */
+/* 恒占一行（禁用时仍撑住高度），否则开局/回大厅时画面会跟着忽大忽小。
+   高度预算很紧：320×568 上多占 5px 就会把虚拟键盘挤出视口，844×390 横屏
+   多占 10px 画面就掉到 220 以下。所以行高取 24，并让 margin-bottom:-8px
+   吃掉 .stagewrap 的 row-gap —— 净占高 = 24（measureStage 按 offsetHeight 扣）。 */
+.toolbar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: min(92vw, 560px);   /* fit() 会改成与画面同宽 */
+  height: 24px;
+  margin-bottom: -8px;       /* = -.stagewrap 的 row-gap，避免多花 8px */
+  padding: 0 2px;
+}
+
+.restart {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: #ffc8ce;
+  background: rgba(224, 49, 49, .1);
+  border: 1px solid rgba(224, 49, 49, .34);
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background .16s ease, color .16s ease, transform .1s ease, opacity .16s ease;
+}
+.restart svg { width: 12px; height: 12px; flex: none; }
+.restart:hover { background: rgba(224, 49, 49, .22); color: #fff; }
+.restart:active { transform: scale(.95); }
+.restart:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* 不是房主 / 不在局内：淡出但保留占位，画面尺寸不受影响 */
+.restart[disabled] { opacity: 0; pointer-events: none; cursor: default; }
+
+/* ===== 背景音乐条（红色主题，结构与迷宫游戏一致） ===== */
+.musicbar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  height: 38px;
+  padding: 0 7px;
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(58, 13, 20, .88), rgba(20, 7, 11, .92));
+  border: 1px solid rgba(224, 49, 49, .28);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .045);
+  overflow: hidden;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.mb-btn {
+  flex: none; display: grid; place-items: center;
+  width: 24px; height: 24px; padding: 0;
+  color: #f0b3bc; background: none; border: none; border-radius: 7px;
+  cursor: pointer; transition: color .16s ease, background .16s ease, transform .1s ease;
+  touch-action: manipulation;
+}
+.mb-btn:hover { color: #ffe3e7; background: rgba(224, 49, 49, .16); }
+.mb-btn:active { transform: scale(.9); }
+.mb-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.mb-btn svg { width: 15px; height: 15px; display: block; }
+.mb-btn[disabled] { opacity: .38; cursor: default; }
+.mb-btn[hidden] { display: none; }
+.mb-play {
+  width: 27px; height: 27px;
+  color: #2b0509;
+  background: linear-gradient(180deg, #f0555f, #b51f2e);
+  box-shadow: 0 0 12px rgba(224, 49, 49, .4);
+}
+.mb-play:hover { color: #2b0509; background: linear-gradient(180deg, #ff6b74, #cc2536); }
+.mb-play svg { width: 16px; height: 16px; }
+.mb-play .ico-pause { display: none; }
+.musicbar.playing .mb-play .ico-play { display: none; }
+.musicbar.playing .mb-play .ico-pause { display: block; }
+.mb-up { display: inline-flex; align-items: center; gap: 3px; width: auto; padding: 0 5px; }
+.mb-up svg { width: 14px; height: 14px; }
+.mb-ulabel { display: none; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.musicbar.wide .mb-ulabel { display: inline; }
+.mb-badge {
+  flex: none; padding: 2px 6px; font-family: inherit; font-size: 9px; font-weight: 800;
+  letter-spacing: .1em; color: #2b0509;
+  background: linear-gradient(180deg, #ff8a8a, #d8353f);
+  border: none; border-radius: 4px; box-shadow: 0 0 10px rgba(224, 49, 49, .35);
+  cursor: pointer; transition: box-shadow .16s ease, transform .1s ease; touch-action: manipulation;
+}
+.mb-badge:hover { box-shadow: 0 0 14px rgba(224, 49, 49, .6); }
+.mb-badge:active { transform: scale(.93); }
+.mb-badge:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.mb-badge.off {
+  color: #f0b3bc; background: rgba(255, 255, 255, .1);
+  box-shadow: inset 0 0 0 1px rgba(224, 49, 49, .3); letter-spacing: .06em;
+}
+/* 音效开关：与 8BIT 徽标同形，但走中性蓝灰 —— 红 = 音乐渲染模式，灰 = 音效。
+   必须写在 .mb-badge:hover / .mb-badge.off 之后，同权重靠顺序覆盖。 */
+.mb-sfx {
+  color: #d7e6f5;
+  background: rgba(160, 200, 240, .16);
+  box-shadow: inset 0 0 0 1px rgba(160, 200, 240, .3);
+  letter-spacing: .04em;
+}
+.mb-sfx:hover { background: rgba(160, 200, 240, .26); box-shadow: inset 0 0 0 1px rgba(190, 220, 255, .55); }
+.mb-sfx.off {
+  color: #7b828b;
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12);
+  text-decoration: line-through;
+}
+/* 关着的时候也要有 hover 反馈（否则上面那条 hover 被 .off 盖掉，按钮像死的） */
+.mb-sfx.off:hover {
+  color: #b9c0c8;
+  background: rgba(255, 255, 255, .1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+}
+.mb-title {
+  flex: 0 1 auto; max-width: 62%; min-width: 0;
+  font-size: 12px; font-weight: 600; letter-spacing: .02em; color: #f2c9cf;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mb-gap { flex: 1 1 auto; min-width: 2px; }
+.musicbar.busy .mb-title { color: #ffd45a; animation: mbBlink 1.1s ease-in-out infinite; }
+.musicbar.err .mb-title { color: #ff9a9a; }
+@keyframes mbBlink { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+.mb-eq { flex: none; display: flex; align-items: flex-end; gap: 2px; height: 14px; opacity: 0; transition: opacity .2s ease; }
+.musicbar.playing .mb-eq { opacity: 1; }
+.mb-eq i { width: 2.5px; height: 8px; border-radius: 1px; background: linear-gradient(180deg, #ff8a8a, #b51f2e); animation: mbBar .92s ease-in-out infinite; }
+.mb-eq i:nth-child(2) { animation-delay: .16s; }
+.mb-eq i:nth-child(3) { animation-delay: .32s; }
+.mb-eq i:nth-child(4) { animation-delay: .48s; }
+@keyframes mbBar { 0%, 100% { height: 5px; opacity: .7; } 50% { height: 13px; opacity: 1; } }
+.mb-vol { flex: none; display: flex; align-items: center; gap: 2px; padding-left: 2px; border-left: 1px solid rgba(224, 49, 49, .2); }
+.mb-mute svg { width: 15px; height: 15px; }
+.mb-mute .cross { display: none; }
+.mb-mute.muted .wave { display: none; }
+.mb-mute.muted .cross { display: block; }
+.mb-mute.muted { color: #a87880; }
+.mb-vol input[type="range"] { -webkit-appearance: none; appearance: none; width: 58px; height: 16px; margin: 0; background: transparent; cursor: pointer; touch-action: manipulation; }
+.mb-vol input[type="range"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.mb-vol input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 3px; background: rgba(240, 160, 170, .24); }
+.mb-vol input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; margin-top: -3.5px; border: none; border-radius: 50%; background: linear-gradient(180deg, #ff8a8a, #b51f2e); box-shadow: 0 0 7px rgba(224, 49, 49, .7); }
+.mb-vol input[type="range"]::-moz-range-track { height: 4px; border-radius: 3px; background: rgba(240, 160, 170, .24); }
+.mb-vol input[type="range"]::-moz-range-thumb { width: 11px; height: 11px; border: none; border-radius: 50%; background: linear-gradient(180deg, #ff8a8a, #b51f2e); }
+.musicbar.compact .mb-vol input[type="range"] { display: none; }
+.musicbar.compact .mb-vol { border-left: none; }
+.musicbar.tiny .mb-eq { display: none; }
+
+/* ===== 功能按钮行 ===== */
+/* z-index 兜底：任何情况下「呼出虚拟按钮」都在键盘浮层之上，随时能收起 */
+.action-row { position: relative; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; width: 100%; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 16px;
+  font-family: inherit; font-size: 13px; font-weight: 700; letter-spacing: .04em;
+  color: var(--text); background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(224, 49, 49, .32); border-radius: 999px;
+  cursor: pointer; white-space: nowrap; touch-action: manipulation;
+  transition: background .18s ease, transform .12s ease, border-color .18s ease;
+}
+.btn:not(:disabled):hover { background: rgba(224, 49, 49, .18); border-color: rgba(224, 49, 49, .6); }
+.btn:not(:disabled):active { transform: scale(.97); }
+.btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn[hidden] { display: none; }
+.btn.primary {
+  color: #fff5f5;
+  background: linear-gradient(180deg, #e03131, #a51825);
+  border-color: rgba(255, 140, 140, .5);
+  box-shadow: 0 8px 22px rgba(224, 49, 49, .32), inset 0 1px 0 rgba(255, 255, 255, .26);
+}
+.btn.primary:not(:disabled):hover { background: linear-gradient(180deg, #f04a4a, #bd1f2e); }
+.btn.ghost { background: transparent; border-color: rgba(255, 255, 255, .2); }
+.btn.small { padding: 7px 11px; font-size: 12px; }
+.btn.tiny { padding: 5px 9px; font-size: 11px; }
+
+/* ===== 虚拟方向键：绝对定位浮层，绝不进 flex 流 =====
+   在 .side 下方展开（top:calc(100% - 18px) 覆盖 .foot 的占位区），
+   不占流、不调 fit()、画面尺寸不变，也绝不盖住 .action-row 里的「呼出虚拟按钮」。
+   --key 与 top 的像素值由 escape-main.js 的 fit() 按可用高度动态覆盖，
+   保证任何视口下十字键盘都完整可见且不被裁。 */
+.pad {
+  position: absolute;
+  left: 50%; top: calc(100% - 18px); bottom: auto; margin-top: 0; z-index: 5;
+  transform: translateX(-50%);
+  display: none;
+  gap: 8px;
+  grid-template-areas: ". u ." "l d r";
+  grid-template-columns: repeat(3, var(--key));
+  grid-template-rows: repeat(2, var(--key));
+  --key: clamp(52px, 14vw, 64px);
+}
+.pad.show { display: grid; animation: padFade .18s ease; }
+@keyframes padFade { from { opacity: 0; transform: translateX(-50%) translateY(6px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+.pad.show ~ .foot { visibility: hidden; }
+.pad button {
+  display: grid; place-items: center;
+  font-family: inherit; font-size: 18px; font-weight: 800;
+  color: #fff0f2;
+  background: rgba(58, 13, 20, .94);
+  border: 1px solid rgba(224, 49, 49, .55);
+  border-radius: 12px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .5);
+  cursor: pointer; touch-action: none;
+}
+.pad button:active { background: rgba(224, 49, 49, .5); }
+.pad button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.foot { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.5; min-height: 16px; }
+
+/* 虚拟键盘始终是十字形（W 在上、A/S/D 在下），不改一行、不改 grid 行列数。
+   键帽尺寸与键盘顶边由 fit() 依据「按钮行底 ~ 视口底」的剩余高度动态设置，
+   因此不再需要按屏幕尺寸写死断点，任何设备都自适应。 */
+
+/* 键盘展开时的极端兜底：若某些视口仍放不下，让 .wrap 内部可滚动到底。
+   auto margin 保证内容不超高时仍垂直居中（画面不会跳动）；隐藏滚动条宽度避免横向抖动。
+   注意不要给 .app 加固定 padding-bottom，那会让空间充足的视口画面无谓上移。 */
+body.pad-open .wrap {
+  overflow-y: auto;
+  align-items: flex-start;
+  scrollbar-width: none;
+}
+body.pad-open .wrap::-webkit-scrollbar { display: none; }
+body.pad-open .app { margin: auto 0; }
+
+/* ===== 全屏遮罩 ===== */
+.toast {
+  position: absolute; left: 50%; bottom: 12px; z-index: 6;
+  transform: translateX(-50%);
+  max-width: 90%; padding: 8px 14px;
+  font-size: 12px; font-weight: 700; letter-spacing: .03em;
+  color: #fff2f4; background: rgba(58, 13, 20, .94);
+  border: 1px solid rgba(224, 49, 49, .5); border-radius: 999px;
+  opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; }
+.overlay {
+  position: absolute; inset: 0; z-index: 5;
+  display: none;
+  align-items: center; justify-content: center;
+  padding: 14px;
+  background: radial-gradient(120% 100% at 50% 0%, rgba(58, 13, 20, .94), rgba(6, 2, 4, .97));
+  overflow: auto;
+}
+.overlay.show { display: flex; }
+.ov-panel {
+  width: min(100%, 380px);
+  max-height: 100%;
+  overflow: auto;
+  padding: 18px 16px;
+  text-align: center;
+  background: rgba(28, 8, 13, .92);
+  border: 1px solid rgba(224, 49, 49, .34);
+  border-radius: 16px;
+  box-shadow: 0 16px 46px rgba(0, 0, 0, .6);
+}
+.ov-panel[hidden] { display: none; }
+.ov-title { margin: 0 0 8px; font-size: 30px; font-weight: 900; letter-spacing: .16em; color: #ffd9de; text-shadow: 0 0 22px rgba(224, 49, 49, .55); }
+.ov-title.small { font-size: 20px; letter-spacing: .1em; }
+.ov-sub { margin: 0 0 14px; font-size: 12.5px; line-height: 1.7; color: var(--muted); }
+/* 标题上方的小字引导：先给「这是个什么游戏」，再给名字 */
+.ov-kicker {
+  margin: 0 0 9px;
+  font-size: 10.5px; font-weight: 800;
+  letter-spacing: .34em; text-indent: .34em;
+  color: rgba(224, 49, 49, .92);
+  text-transform: uppercase;
+}
+/* 三条规则速览：图标 + 短语，横向平分，窄屏自动折成两行 */
+.rule-row {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 7px; margin: 0 0 18px; padding: 0; list-style: none;
+}
+.rule-row li {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 9px 5px 7px;
+  font-size: 11px; font-weight: 700; color: #dcb0b8;
+  background: rgba(255, 255, 255, .045);
+  border: 1px solid rgba(224, 49, 49, .2);
+  border-radius: 8px;
+}
+.rule-row i { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; }
+.ro-key { background: linear-gradient(160deg, #ffe9a8, #ffd45a); box-shadow: 0 0 7px rgba(255, 212, 90, .7); }
+.ro-fake { background: linear-gradient(160deg, #ff9ed6, #ff2ba6); box-shadow: 0 0 7px rgba(255, 0, 170, .55); }
+.ro-exit { background: linear-gradient(160deg, #ff9a9a, #ff3b3b); box-shadow: 0 0 7px rgba(255, 59, 59, .6); border-radius: 50%; }
+.ov-tip { margin: 10px 0 0; font-size: 11px; line-height: 1.6; color: var(--muted); }
+
+/* 房间大厅 */
+.lobby-line { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; justify-content: center; }
+.lobby-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.lobby-code { font-size: 18px; letter-spacing: .22em; color: #ffd45a; }
+.field {
+  flex: 1 1 130px; min-width: 0;
+  padding: 6px 9px;
+  font-family: inherit; font-size: 11.5px;
+  color: var(--text);
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(224, 49, 49, .3); border-radius: 8px;
+  outline: none;
+}
+.field:focus { border-color: var(--accent-2); }
+.field.slim { flex: 0 0 auto; width: auto; padding: 6px 5px; font-size: 11px; }
+.field option { color: #1a070b; }
+.relay-line { justify-content: flex-start; }
+/* 穿透开关：label 不能沿用 .lobby-label 的 nowrap，窄屏会顶出面板 */
+.turn-line { justify-content: flex-start; }
+.turn-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--muted); cursor: pointer; text-align: left;
+}
+.turn-toggle input { width: 13px; height: 13px; margin: 0; accent-color: #e03131; cursor: pointer; }
+.net-note { text-align: left; margin: 0 0 8px; }
+.net-note.warn { color: #ffb86b; }
+.net-note.ok { color: #63d29a; }
+.roster { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; margin: 10px 0; }
+.seat {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; font-size: 11px;
+  background: rgba(255, 255, 255, .045);
+  border: 1px solid rgba(255, 255, 255, .09); border-radius: 8px;
+  min-width: 0;
+}
+.seat.empty { opacity: .45; }
+/* 人机座位：金色描边 + 「人机」标签，和真人区分 */
+.seat.bot { border-color: rgba(255, 212, 90, .34); background: rgba(255, 212, 90, .06); }
+.seat.bot .tag { color: #ffd45a; }
+.seat .dot { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(255,255,255,.5); }
+.seat .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seat .tag { margin-left: auto; flex: none; font-size: 10px; color: var(--muted); }
+.color-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; justify-content: center; margin: 10px 0; }
+/* 名字与颜色共用一行：窄屏省掉一整行高度，主操作按钮才不会被挤出面板 */
+.name-field { flex: 0 1 92px; width: 92px; padding: 6px 7px; }
+/* 大厅比开场页多好几行，窄屏（320~390）得整体收紧，否则「开始游戏」会被挤出面板，
+   用户得先滚动一下才点得到。只收紧大厅，不动开场页和游戏内布局。 */
+#lobbyView { padding: 12px 14px; }
+#lobbyView .ov-title.small { margin-bottom: 4px; }
+#lobbyView .lobby-line { margin-bottom: 5px; }
+#lobbyView .roster { gap: 4px; margin: 6px 0; }
+#lobbyView .seat { padding: 5px 7px; }
+#lobbyView .color-row { margin: 6px 0; }
+#lobbyView .lobby-actions { margin-top: 6px; }
+@media (max-width: 480px) {
+  /* 文字一藏，自定义色块就能和名字 / 预设色挤进同一行，省掉一整行高度 */
+  #lobbyView .picker span { display: none; }
+}
+.preview { flex: none; width: 22px; height: 22px; border-radius: 6px; border: 2px solid rgba(255,255,255,.4); }
+.swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.swatch { width: 22px; height: 22px; padding: 0; border: 1px solid rgba(255,255,255,.22); border-radius: 6px; cursor: pointer; }
+.swatch.on { outline: 2px solid #fff; outline-offset: 1px; transform: scale(1.12); }
+.swatch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.picker { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+.picker input[type="color"] { width: 26px; height: 22px; padding: 0; border: 1px solid rgba(255,255,255,.25); border-radius: 6px; background: none; cursor: pointer; }
+.lobby-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+
+/* 能力弹窗 */
+.ability-card { margin: 12px 0; padding: 14px; background: rgba(224, 49, 49, .1); border: 1px solid rgba(224, 49, 49, .35); border-radius: 12px; }
+.ability-name { display: block; font-size: 18px; color: #ffd45a; letter-spacing: .08em; }
+.ability-desc { margin: 8px 0 0; font-size: 12px; line-height: 1.7; color: #e9c7cc; }
+
+/* 复盘 */
+.review-panel { width: min(100%, 400px); text-align: left; }
+.review-panel .ov-title { text-align: center; }
+.rv-sec { margin: 12px 0; padding: 10px 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(224,49,49,.2); border-radius: 10px; }
+.rv-sec h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .1em; color: #ff9fa8; }
+.rv-grid { display: grid; grid-template-columns: 1fr auto; gap: 5px 10px; font-size: 11.5px; }
+.rv-grid span { color: var(--muted); }
+.rv-grid strong { color: #ffd9de; text-align: right; }
+.rv-table { margin-top: 8px; font-size: 11px; line-height: 1.8; }
+.rv-row { display: flex; align-items: center; gap: 6px; }
+.rv-row .dot { flex: none; width: 9px; height: 9px; border-radius: 50%; }
+.rv-row .txt { color: #e9c7cc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-panel .btn.primary { display: flex; width: 100%; margin-top: 12px; }
+
+/* ===== 横屏 / 窄屏 ===== */
+/* 注意：这里不要重写 .hud 的 top —— .hud 本来就 top:100%，
+   而更高特异性的 body.landscape .hud 会压过兜底用的 .hud.inside{top:auto;bottom:0}，
+   导致矮横屏（如 1280×720）的 HUD 被裁在视口外。 */
+@media (min-aspect-ratio: 1/1) and (min-width: 700px) {
+  body.landscape .side { margin-top: 0; }
+}
+@media (max-width: 420px) {
+  .ov-panel { padding: 14px 11px; }
+  .ov-title { font-size: 25px; }
+  /* 窄屏不再为了塞进一行而把字号压到 10.5px：允许折行后可以保住可读性，
+     行高 15px 左右，两行仍落在 32px 的预留里。 */
+  .hud { column-gap: 8px; font-size: 11.5px; min-height: 27px; }
+  .heart { width: 12px; height: 12px; }
+  .btn.small { padding: 6px 8px; font-size: 11px; }
+  .foot { font-size: 10px; }
+  .mb-vol input[type="range"] { width: 44px; }
+}
+
+/* ===== 大厅：分区卡片 ===== */
+.lobby-panel { width: min(100%, 404px); padding: 14px 14px 12px; text-align: left; }
+.lobby-head { text-align: center; margin-bottom: 10px; }
+.lobby-head .ov-kicker { margin-bottom: 4px; font-size: 9.5px; letter-spacing: .32em; text-indent: .32em; color: rgba(224, 49, 49, .72); }
+.lobby-head .ov-title { margin: 0; }
+.lobby-sec {
+  position: relative;
+  margin: 0 0 9px;
+  padding: 9px 10px 10px;
+  background: rgba(255, 255, 255, .028);
+  border: 1px solid rgba(255, 255, 255, .075);
+  border-radius: 12px;
+}
+/* 小标题：左侧标签 + 一条渐隐横线，用来切分区块而不增加高度 */
+.sec-head { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.sec-name {
+  flex: 0 0 auto;
+  font-size: 9.5px; font-weight: 800; letter-spacing: .26em;
+  color: rgba(255, 190, 200, .62);
+}
+.sec-head::after {
+  content: ''; flex: 1 1 auto; height: 1px;
+  background: linear-gradient(90deg, rgba(224, 49, 49, .28), rgba(224, 49, 49, 0));
+}
+.sec-meta { flex: 0 0 auto; font-size: 10px; font-weight: 800; color: #ffd45a; letter-spacing: .06em; }
+
+/* 房号主视觉：房号是这局唯一的「门牌」，单独给一行大字 */
+.room-hero {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 9px;
+  background: radial-gradient(120% 140% at 0% 50%, rgba(224, 49, 49, .2), rgba(224, 49, 49, .04));
+  border: 1px solid rgba(224, 49, 49, .28);
+  border-radius: 10px;
+  margin-bottom: 7px;
+}
+.room-hero .rl { flex: 0 0 auto; font-size: 9.5px; letter-spacing: .2em; color: var(--muted); }
+.room-hero .lobby-code { flex: 1 1 auto; margin: 0; font-size: 21px; line-height: 1; letter-spacing: .3em; text-indent: .3em; }
+/* 还没建房：房号是占位横线，整条压暗，把注意力留给「创建房间」 */
+.room-hero.idle { background: rgba(255, 255, 255, .028); border-style: dashed; border-color: rgba(255, 255, 255, .12); }
+.room-hero.idle .lobby-code { color: rgba(255, 255, 255, .3); letter-spacing: .18em; text-indent: .18em; font-size: 18px; }
+.room-hero.idle .rl { color: rgba(255, 255, 255, .28); }
+
+/* 大厅内的行间距统一收紧（原来每条 line 自带 margin-bottom） */
+#lobbyView .lobby-line { margin-bottom: 6px; }
+#lobbyView .lobby-line:last-child { margin-bottom: 0; }
+#lobbyView .roster { margin: 0; }
+#lobbyView .color-row { margin: 8px 0 0; }
+#lobbyView .lobby-actions { margin-top: 2px; }
+#lobbyView .ov-tip { margin-top: 8px; }
+
+/* 座位：给「我」一个红描边，一眼看到自己坐哪 */
+.seat.me { border-color: rgba(224, 49, 49, .5); background: rgba(224, 49, 49, .09); }
+.seat .who { font-weight: 700; }
+.seat.empty .who { font-weight: 400; }
+
+/* 能力弹窗：能力名做成「徽章 + 说明」两段式，比一整块文字更好读 */
+.ability-card {
+  position: relative;
+  margin: 12px 0 10px; padding: 16px 14px 14px;
+  background: radial-gradient(130% 120% at 50% 0%, rgba(255, 212, 90, .12), rgba(224, 49, 49, .1) 55%, rgba(224, 49, 49, .05));
+  border: 1px solid rgba(255, 212, 90, .3);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.ability-card::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 212, 90, .65), transparent);
+}
+.ability-name { font-size: 21px; letter-spacing: .14em; text-shadow: 0 0 18px rgba(255, 212, 90, .45); }
+.ability-desc { margin: 9px 0 0; font-size: 12px; line-height: 1.75; color: #e9c7cc; }
+.ability-tag {
+  display: inline-block; margin-top: 10px; padding: 3px 9px;
+  font-size: 9.5px; font-weight: 800; letter-spacing: .18em;
+  color: #2a0a10; background: linear-gradient(160deg, #ffe9a8, #ffd45a);
+  border-radius: 999px;
+}
+
+/* ===== 复盘页 =====
+   只作用于 #ovReview。两套气质由 showReview 切的 .win / .lose 决定：
+   胜利 = 金色光晕 + 亮红，失败 = 暗红压迫。纯 CSS，无图片、无 JS 动画。 */
+#ovReview {
+  --rv-gold: #ffd45a; --rv-gold-soft: rgba(255, 212, 90, .55);
+  /* 复盘页要盖满整屏：.overlay 原本是 absolute + inset:0，定位祖先是方形的 #stage，
+     窄屏上会被挤成一块小方块、按钮直接被挤出视口。这里只给 #ovReview 改成 fixed，
+     其它 overlay 不受影响。祖先上没有 transform/filter，fixed 能正常相对视口定位。 */
+  position: fixed; inset: 0; z-index: 60;
+}
+
+#ovReview .review-panel {
+  width: min(100%, 436px);
+  max-height: 100%;
+  padding: 0;
+  text-align: left;
+  background: linear-gradient(180deg, rgba(36, 11, 17, .96), rgba(13, 4, 6, .97));
+  border-color: rgba(255, 212, 90, .18);
+}
+
+/* ---- 结论区 ---- */
+#ovReview .rv-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 12px 14px 10px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+/* 顶部高光条：胜利金、失败暗红 */
+#ovReview .rv-hero::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--rv-gold-soft), transparent);
+}
+/* 背后光晕：胜利是从上打下来的金色暖光，失败是一团压在头顶的暗红 */
+#ovReview .rv-hero::after {
+  content: ''; position: absolute; z-index: -1;
+  left: 50%; top: -78px; width: 360px; height: 210px;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(255, 212, 90, .24), rgba(224, 49, 49, .1) 55%, transparent 74%);
+}
+#ovReview .rv-kicker {
+  margin: 0 0 4px;
+  font-size: 9.5px; font-weight: 800;
+  letter-spacing: .44em; text-indent: .44em;
+  color: rgba(255, 212, 90, .82);
+}
+#ovReview .rv-title {
+  margin: 0;
+  font-size: 30px; font-weight: 900; line-height: 1.06;
+  letter-spacing: .2em; text-indent: .2em;
+  background: linear-gradient(180deg, #fff5d0, #ffd45a 55%, #e7a11d);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 18px rgba(255, 212, 90, .42));
+}
+#ovReview .rv-sub {
+  margin: 7px 0 0;
+  font-size: 12px; line-height: 1.5; letter-spacing: .04em;
+  color: #e6c3a0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 失败：把金色整体抽掉，换成压得住呼吸的暗红 */
+#ovReview.lose .rv-hero::before { background: linear-gradient(90deg, transparent, rgba(224, 49, 49, .45), transparent); }
+#ovReview.lose .rv-hero::after {
+  top: -54px; width: 420px; height: 190px;
+  background: radial-gradient(closest-side, rgba(140, 14, 26, .62), rgba(60, 6, 12, .42) 58%, transparent 76%);
+}
+#ovReview.lose .rv-kicker { color: rgba(255, 154, 163, .88); }
+#ovReview.lose .rv-title {
+  background: linear-gradient(180deg, #ffc2c7, #e24454 56%, #a01f2c);
+  -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 0 18px rgba(200, 40, 56, .5));
+}
+#ovReview.lose .rv-sub { color: #c98990; }
+
+/* ---- 数据区 ---- */
+#ovReview .rv-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 10px 13px 0;
+}
+#ovReview .rv-stat {
+  display: flex; flex-direction: column; gap: 0;
+  padding: 6px 9px 7px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 10px;
+}
+/* 总耗时是「这一局到底打了多久」，独占一行、字最大 */
+#ovReview .rv-stat-lead {
+  grid-column: 1 / -1;
+  flex-direction: row; align-items: baseline; justify-content: space-between;
+  padding: 7px 11px 8px;
+  background:
+    radial-gradient(120% 180% at 0% 50%, rgba(255, 212, 90, .16), transparent 62%),
+    rgba(255, 255, 255, .03);
+  border-color: rgba(255, 212, 90, .26);
+}
+#ovReview .rv-k {
+  font-size: 10px; font-weight: 700; letter-spacing: .16em;
+  color: #bb8a92;
+}
+#ovReview .rv-v {
+  font-size: 23px; font-weight: 800; line-height: 1.15;
+  color: var(--rv-gold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+}
+#ovReview .rv-stat-lead .rv-v { font-size: 29px; letter-spacing: .06em; text-shadow: 0 0 20px rgba(255, 212, 90, .38); }
+#ovReview .rv-x {
+  font-size: 9.5px; letter-spacing: .04em;
+  color: rgba(201, 154, 162, .72);
+  font-variant-numeric: tabular-nums;
+}
+#ovReview.lose .rv-v { color: #f0b66a; }
+#ovReview.lose .rv-stat-lead { border-color: rgba(224, 49, 49, .3); }
+
+/* 阶段节奏：集齐钥匙 → 全员汇合，用两段时间戳把过程讲成一条线 */
+#ovReview .rv-phases {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin: 6px 13px 0; padding: 5px 10px;
+  background: rgba(255, 255, 255, .025);
+  border: 1px dashed rgba(255, 255, 255, .1);
+  border-radius: 10px;
+}
+#ovReview .rv-phase { display: flex; align-items: baseline; gap: 6px; }
+#ovReview .rv-phase i { font-style: normal; font-size: 10px; letter-spacing: .1em; color: #bb8a92; }
+#ovReview .rv-phase b {
+  font-size: 13px; font-weight: 800; color: #ffd9de;
+  font-variant-numeric: tabular-nums;
+}
+#ovReview .rv-arrow { font-size: 11px; color: rgba(255, 212, 90, .5); }
+
+/* ---- 队伍表现 ---- */
+#ovReview .rv-sec {
+  margin: 8px 13px 0;
+  padding: 8px 10px 6px;
+  background: rgba(255, 255, 255, .028);
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 10px;
+}
+#ovReview .rv-sec-t {
+  margin: 0 0 3px;
+  font-size: 10px; font-weight: 800; letter-spacing: .18em;
+  color: #bb8a92;
+}
+#ovReview .rv-table { margin: 0; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+/* 表头 + 每人一行共用同一套列宽，数字才会垂直对齐 */
+#ovReview .rv-th,
+#ovReview .rv-tr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px 30px 40px 46px;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+}
+#ovReview .rv-th {
+  font-size: 9px; font-weight: 700; letter-spacing: .1em;
+  color: rgba(201, 154, 162, .62);
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+  padding-bottom: 4px;
+}
+#ovReview .rv-th span:not(.c-who),
+#ovReview .rv-tr .c-num,
+#ovReview .rv-tr .c-tag { text-align: right; }
+#ovReview .rv-tr + .rv-tr { border-top: 1px solid rgba(255, 255, 255, .045); }
+#ovReview .rv-tr.mvp { background: linear-gradient(90deg, rgba(255, 212, 90, .14), transparent 72%); }
+#ovReview .rv-tr.bled { background: linear-gradient(90deg, rgba(224, 49, 49, .16), transparent 72%); }
+#ovReview .rv-tr.mvp.bled { background: linear-gradient(90deg, rgba(255, 212, 90, .14), rgba(224, 49, 49, .12) 72%, transparent); }
+#ovReview .c-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#ovReview .c-who .dot {
+  flex: none; width: 8px; height: 8px; border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .5);
+}
+#ovReview .c-who b {
+  font-weight: 700; color: #f4dde2;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#ovReview .c-who em {
+  flex: none; font-style: normal; font-size: 9px; font-weight: 800;
+  padding: 0 4px; border-radius: 4px;
+  color: #2a0a10; background: var(--rv-gold);
+}
+#ovReview .c-num { color: #e9c7cc; }
+#ovReview .c-num.gold { color: var(--rv-gold); font-weight: 800; }
+#ovReview .c-num.dim { color: rgba(201, 154, 162, .7); }
+#ovReview .c-num.red { color: #ff7b86; font-weight: 800; }
+#ovReview .rv-tag {
+  display: inline-block;
+  font-style: normal; font-size: 8.5px; font-weight: 800;
+  letter-spacing: .04em; line-height: 1.5;
+  padding: 0 4px; border-radius: 4px;
+  color: #2a0a10; background: var(--rv-gold);
+}
+#ovReview .rv-tag.red { color: #fff1f2; background: rgba(224, 49, 49, .85); }
+#ovReview .rv-tag.dim { color: #d9b3ba; background: rgba(255, 255, 255, .1); }
+
+/* ---- 底部按钮：整条描金，复盘页唯一的主操作 ---- */
+#ovReview .rv-back {
+  display: flex; width: calc(100% - 26px);
+  margin: 10px 13px 11px;
+  padding: 10px 16px; font-size: 14px; letter-spacing: .1em;
+  background: linear-gradient(180deg, #f04a4a, #a51825);
+  border-color: rgba(255, 212, 90, .5);
+  box-shadow: 0 10px 26px rgba(224, 49, 49, .34), inset 0 1px 0 rgba(255, 255, 255, .28);
+}
+#ovReview .rv-back:not(:disabled):hover {
+  background: linear-gradient(180deg, #ffd45a, #e69f1d);
+  color: #2a0a10;
+  border-color: #ffe9a8;
+}
+
+/* 窄屏 / 矮屏：等比例收一号，仍然优先塞进一屏；真放不下由 .ov-panel 自己滚 */
+@media (max-width: 430px) {
+  #ovReview { padding: 8px; }
+  #ovReview .review-panel { width: 100%; max-height: 100%; }
+  #ovReview .rv-hero { padding: 12px 12px 11px; }
+  #ovReview .rv-title { font-size: 28px; }
+  #ovReview .rv-stats { padding: 10px 10px 0; gap: 6px; }
+  #ovReview .rv-stat-lead .rv-v { font-size: 27px; }
+  #ovReview .rv-v { font-size: 20px; }
+  #ovReview .rv-sec, #ovReview .rv-phases { margin-left: 10px; margin-right: 10px; }
+  #ovReview .rv-back { width: calc(100% - 20px); margin: 10px 10px 12px; padding: 10px 14px; }
+}
+@media (max-height: 700px) {
+  #ovReview .rv-hero { padding: 10px 14px 9px; }
+  #ovReview .rv-title { font-size: 26px; }
+  #ovReview .rv-stats { padding-top: 8px; gap: 6px; }
+  #ovReview .rv-stat { padding: 6px 9px 7px; }
+  #ovReview .rv-stat-lead { padding: 7px 10px 8px; }
+  #ovReview .rv-stat-lead .rv-v { font-size: 26px; }
+  #ovReview .rv-v { font-size: 20px; }
+  #ovReview .rv-phases { margin-top: 6px; padding: 5px 9px; }
+  #ovReview .rv-sec { margin-top: 8px; padding: 7px 9px 5px; }
+  #ovReview .rv-th, #ovReview .rv-tr { padding-top: 2px; padding-bottom: 2px; }
+  #ovReview .rv-back { margin-top: 9px; margin-bottom: 10px; padding: 9px 14px; }
+}
+
+
+
+/* ===== 大屏侧栏信息卡（只在横向布局出现：竖屏侧栏在画面下方，塞不下） ===== */
+.side-card { display: none; }
+@media (min-aspect-ratio: 1/1) and (min-width: 700px) {
+  .side-card:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 12px 11px;
+    background: linear-gradient(180deg, rgba(40, 12, 18, .72), rgba(14, 5, 9, .78));
+    border: 1px solid rgba(224, 49, 49, .22);
+    border-radius: 13px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(255, 255, 255, .025);
+  }
+}
+.sc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.sc-title { font-size: 9.5px; font-weight: 800; letter-spacing: .26em; color: rgba(255, 190, 200, .62); }
+.sc-meta { font-size: 10px; font-weight: 800; color: #ffd45a; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.sc-team { display: flex; flex-direction: column; gap: 5px; }
+.sc-row {
+  display: grid;
+  grid-template-columns: 7px 1fr auto auto;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 7px 4px 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(255, 255, 255, .055);
+  font-size: 11px;
+  font-weight: 700;
+  color: #e6ccd2;
+}
+.sc-row.me { border-color: rgba(224, 49, 49, .48); background: rgba(224, 49, 49, .14); color: #fff2f4; }
+.sc-row.down { opacity: .45; }
+.sc-row .sc-dot { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 7px currentColor; }
+.sc-row .sc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-row .sc-hp { display: inline-flex; gap: 2px; }
+.sc-row .sc-hp i { width: 6px; height: 6px; border-radius: 1px; background: #ff4d5e; box-shadow: 0 0 5px rgba(255, 77, 94, .55); }
+.sc-row .sc-hp i.off { background: rgba(255, 255, 255, .12); box-shadow: none; }
+.sc-row .sc-n { font-size: 10px; color: #ffd45a; font-variant-numeric: tabular-nums; }
+.sc-row.down .sc-n { color: #9a7b82; }
+.sc-goal { display: flex; flex-direction: column; gap: 5px; }
+.sc-goal-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.sc-goal-name { font-size: 10px; font-weight: 700; color: #c99aa2; letter-spacing: .06em; }
+.sc-goal-row b { font-size: 13px; color: #ffd45a; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.sc-bar { height: 5px; border-radius: 999px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.sc-bar i {
+  display: block; height: 100%; width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff8a5c, #ffd45a);
+  box-shadow: 0 0 10px rgba(255, 212, 90, .5);
+  transition: width .28s ease;
+}
+.sc-hint { margin: 0; font-size: 10px; line-height: 1.5; color: #8e6a72; }
+
+/* ===== 局内操作层（音乐条 / 飘字 / 操作区 / 方向盘 / 说明卡） =====
+   只动「画面外」的这一圈 chrome。尺寸都留在 JS 量得到的地方：
+   fit() 只读 .musicbar.offsetHeight 与 .toolbar.offsetHeight，
+   这里只减不加，画面只会变更大，不会被挤小。 */
+
+/* ---- 1. 音乐条：从「横杠」改成窗口标题栏 ---- */
+/* 两侧各让 7px，和画面留出呼吸；JS 用 inline width 写死 s，所以这里必须 !important
+   才能收窄（只影响观感，fit() 量的是高度，不受影响）。 */
+.musicbar {
+  width: calc(100% - 14px) !important;
+  margin: 0 auto;
+  height: 34px;
+  padding: 0 5px 0 7px;
+  gap: 4px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(62, 15, 23, .92), rgba(18, 6, 10, .95));
+  border-color: rgba(224, 49, 49, .24);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45),
+              inset 0 1px 0 rgba(255, 255, 255, .06),
+              inset 0 -1px 0 rgba(0, 0, 0, .45);
+}
+/* 左组（播放 + 两个模式徽标）与右组（上传 + 音量）之间靠 .mb-gap 顶开，
+   曲名占中间；组内 4px、组间靠 margin 再多一点，节奏才分得出来。 */
+.musicbar .mb-play { width: 25px; height: 25px; }
+.musicbar .mb-play svg { width: 14px; height: 14px; }
+.musicbar .mb-badge {
+  height: 17px; padding: 0 5px;
+  font-size: 8.5px; letter-spacing: .07em; line-height: 17px;
+}
+.musicbar .mb-sfx { margin-left: 1px; }
+.musicbar .mb-title {
+  max-width: 56%;
+  margin-left: 4px;
+  font-size: 11.5px; font-weight: 600; letter-spacing: .05em;
+  color: #e9c6cc;
+}
+.musicbar.playing .mb-title { color: #f6d7dc; }
+.musicbar .mb-eq { margin: 0 2px; }
+.musicbar .mb-up { padding: 0 3px; }
+.musicbar .mb-vol { gap: 0; margin-left: 2px; padding-left: 6px; }
+.musicbar .mb-vol input[type="range"] { width: 52px; }
+/* 工具条与音乐条同宽内缩，右上角「返回房间」才和标题栏右缘对齐 */
+.toolbar { padding: 0 7px; }
+
+/* ---- 2. 飘字：从大胶囊改成薄毛玻璃小条 ---- */
+/* 原来 8px/14px 的内边距 + 12px 粗体 + 实心暗底，压在棋盘底部很抢戏。
+   现在：更矮、更透、字更小、贴底 9px，长文案允许折行（不再顶出画面）。 */
+.toast {
+  bottom: 11px;
+  max-width: 84%;
+  padding: 4px 10px;
+  font-size: 11px; font-weight: 600; letter-spacing: .05em; line-height: 1.45;
+  color: #ffeef1;
+  background: rgba(28, 7, 12, .6);
+  border: 1px solid rgba(255, 156, 168, .16);
+  border-radius: 999px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .38);
+  -webkit-backdrop-filter: blur(9px) saturate(1.25);
+  backdrop-filter: blur(9px) saturate(1.25);
+  white-space: normal; text-align: center;
+  transform: translateX(-50%) translateY(5px);
+  transition: opacity .18s ease, transform .18s ease;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* 矮屏时 HUD 会贴到画面内部（fit() 给 .hud 加 .inside），飘字要再抬高一段，
+   否则正好压在队伍血条上。44px ≈ 两行 HUD 的高度 + 间距。 */
+body:has(.hud.inside) .toast { bottom: 46px; }
+
+/* ---- 3. 操作区：按钮行 + 方向盘 + 说明卡归成一个「区」 ---- */
+/* 用一条组标题（左标签 + 右渐隐横线，和 .sec-head 同一套语言）把它们圈起来，
+   标题写进 .action-row 的 padding 里，不额外占一行高度。 */
+.side .action-row { row-gap: 6px; column-gap: 7px; }
+/* 组标题只在局内出现（:has 选 .hud.show）。不支持 :has 的浏览器只是看不到标签，
+   布局与功能都不受影响。 */
+.side .action-row::before {
+  content: ''; position: absolute; left: 1px; top: 0;
+  font-size: 9px; font-weight: 800; letter-spacing: .26em; text-indent: .26em;
+  color: rgba(255, 190, 200, .52);
+}
+.side .action-row::after {
+  content: ''; position: absolute; left: 38px; right: 0; top: 6px; height: 1px;
+  background: linear-gradient(90deg, rgba(224, 49, 49, .3), rgba(224, 49, 49, 0));
+  opacity: 0;
+}
+body:has(.hud.show) .side .action-row { padding-top: 15px; }
+body:has(.hud.show) .side .action-row::before { content: '操作'; }
+body:has(.hud.show) .side .action-row::after { opacity: 1; }
+/* 桌面端「呼出虚拟按钮」被藏掉后，穿墙/抢救/观战都没触发时这一行是空的，
+   只剩一个「操作」标签孤零零悬着 —— 这时整组（标签+分隔线+留白）一起收掉。 */
+@media (hover: hover) and (pointer: fine) {
+  body:has(.hud.show) .side .action-row:not(:has(> button:not([hidden]):not(#btnKb))) {
+    padding-top: 0;
+  }
+  body:has(.hud.show) .side .action-row:not(:has(> button:not([hidden]):not(#btnKb)))::before { content: ''; }
+  body:has(.hud.show) .side .action-row:not(:has(> button:not([hidden]):not(#btnKb)))::after { opacity: 0; }
+}
+/* 「呼出虚拟按钮」被按下时（JS 切 .active）以前完全没反馈，补上 */
+/* 精确指针设备（鼠标）没有虚拟键盘的需求：把入口藏掉。
+   触摸屏 / 混合设备（hover:none 或 pointer:coarse）保持可见。
+   按钮本身仍可被脚本 .click()，自动化测试不受影响。 */
+@media (hover: hover) and (pointer: fine) {
+  #btnKb { display: none; }
+  /* 桌面绝不显示方向盘：即使 .show 是上一次触摸会话/脚本留下的，只要没被显式
+     打开（body.pad-open）就一律不渲染。脚本点了 btnKb 后 pad-open 生效，
+     自动化测试仍能取到键盘。 */
+  body:not(.pad-open) .pad.show { display: none; }
+}
+#btnKb.active {
+  color: #fff;
+  background: rgba(224, 49, 49, .3);
+  border-color: rgba(255, 212, 90, .5);
+  box-shadow: inset 0 0 0 1px rgba(255, 212, 90, .18);
+}
+
+/* ---- 4. 方向盘 ---- */
+/* 键帽做成「实体键」：上亮下暗的渐变 + 内阴影，按下才看得出被压下去。
+   :active 在 pointerdown 时就生效，配合 JS 的 holdDir 长按连走。 */
+.pad button {
+  background: linear-gradient(180deg, rgba(78, 18, 28, .96), rgba(26, 7, 12, .97));
+  border-color: rgba(224, 49, 49, .42);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, .5),
+              inset 0 1px 0 rgba(255, 255, 255, .07),
+              inset 0 -2px 0 rgba(0, 0, 0, .4);
+  transition: transform .07s ease, background .1s ease, border-color .1s ease, box-shadow .1s ease;
+}
+.pad button:active {
+  transform: scale(.93);
+  color: #fff8e0;
+  background: linear-gradient(180deg, rgba(226, 56, 66, .82), rgba(140, 22, 36, .9));
+  border-color: rgba(255, 212, 90, .62);
+  box-shadow: 0 0 0 2px rgba(255, 212, 90, .16), inset 0 2px 6px rgba(0, 0, 0, .35);
+}
+
+/* ---- 5. 说明卡（.foot 重排成「键位 / 目标 / 触屏」三行） ---- */
+.foot {
+  width: 100%;
+  min-height: 0;
+  display: flex; flex-direction: column; gap: 3px;
+  text-align: left;
+  font-size: 11px; line-height: 1.5;
+  color: var(--muted);
+}
+.ft-row { margin: 0; display: flex; align-items: baseline; gap: 7px; }
+.ft-row + .ft-row { display: none; }        /* 默认只留第一行，见下面两段媒体查询 */
+.ft-k {
+  display: none;                             /* 窄屏不要标签，一句话更省地方 */
+  flex: 0 0 auto; width: 28px;
+  font-size: 9px; font-weight: 800; letter-spacing: .14em;
+  color: rgba(255, 190, 200, .45);
+}
+.ft-v { flex: 1 1 auto; min-width: 0; }
+.ft-v b { color: #ffd45a; font-weight: 700; }
+/* 触屏设备：键盘那行没意义，换成「点这里呼出」 */
+@media (hover: none), (pointer: coarse) {
+  .foot .ft-keys { display: none; }
+  .foot .ft-touch { display: flex; }
+}
+
+/* ---- 6. 大屏：说明文字升级成一张真正的「操作说明」小卡 ---- */
+@media (min-width: 1200px) {
+  .foot {
+    gap: 5px;
+    padding: 9px 11px 10px;
+    background: linear-gradient(180deg, rgba(40, 12, 18, .5), rgba(14, 5, 9, .62));
+    border: 1px solid rgba(224, 49, 49, .16);
+    border-radius: 11px;
+    font-size: 11.5px; line-height: 1.6;
+  }
+  .foot::before {
+    content: '操作说明';
+    display: block; margin-bottom: 1px;
+    font-size: 9px; font-weight: 800; letter-spacing: .26em;
+    color: rgba(255, 190, 200, .5);
+  }
+  .foot .ft-goal { display: flex; }   /* 触屏那行交给下面的 (hover:none) 决定 */
+  .ft-k { display: block; }
+  .side .action-row { padding-top: 17px; }
+}
+
+/* ---- 7. 窄屏 / 矮屏：先把说明文字让出去，保住画面和方向盘 ---- */
+@media (max-width: 420px) {
+  .musicbar { height: 32px; padding: 0 4px 0 6px; gap: 3px; }
+  .musicbar .mb-title { max-width: 50%; font-size: 11px; margin-left: 2px; }
+  .musicbar .mb-eq { display: none; }              /* 频谱条在窄条上纯属噪音 */
+  .musicbar .mb-vol { border-left: none; padding-left: 0; margin-left: 0; }
+  .musicbar .mb-vol input[type="range"] { display: none; }  /* 只留静音键，不再和上传挤 */
+  .musicbar .mb-up { padding: 0 2px; }
+  .musicbar .mb-badge { padding: 0 4px; font-size: 8px; letter-spacing: .04em; }
+  .side .action-row { padding-top: 13px; column-gap: 6px; }
+  .side .action-row::after { left: 34px; }
+  .foot { font-size: 10.5px; }
+}
+/* 竖屏矮视口：说明文字完全收起，只留按钮行，画面与键盘优先 */
+@media (max-height: 640px) and (max-width: 560px) {
+  .foot { display: none; }
+}
+/* 375×667 / 390×844 这类「不够高」的手机竖屏：把「操作」组标题让出去，
+   换回 15px 给画面。选择器写成和上面 body:has 同形，才能压过它的 padding-top。 */
+@media (max-height: 720px) and (max-width: 560px) {
+  body:has(.hud.show) .side .action-row { padding-top: 0; }
+  body:has(.hud.show) .side .action-row::before { content: ''; }
+  body:has(.hud.show) .side .action-row::after { opacity: 0; }
+  .foot { display: none; }
+}
+/* 极窄（iPhone SE 一类）：徽标只留图标语义，曲名再收一号 */
+@media (max-width: 360px) {
+  .musicbar .mb-title { max-width: 42%; font-size: 10.5px; }
+  .musicbar .mb-sfx { letter-spacing: 0; }
+}
+
+
